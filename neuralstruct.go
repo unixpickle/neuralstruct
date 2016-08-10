@@ -2,10 +2,13 @@
 // neural networks with various data structures.
 package neuralstruct
 
+import "github.com/unixpickle/num-analysis/linalg"
+
 // A Struct is an instance of a differentiable data structure.
 type Struct interface {
 	ControlSize() int
 	DataSize() int
+	StartState() StructState
 }
 
 // A StructState is the output of a Struct at a timestep.
