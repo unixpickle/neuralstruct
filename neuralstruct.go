@@ -28,5 +28,5 @@ type StructState interface {
 
 	// NextState computes the next state after applying the
 	// given control vector to this state.
-	NextState(control linalg.Vector)
+	NextState(control linalg.Vector) StructState
 }

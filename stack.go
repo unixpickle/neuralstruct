@@ -32,7 +32,10 @@ func (s *Stack) DataSize() int {
 
 // StartState returns the empty stack.
 func (s *Stack) StartState() StructState {
-	return &stackState{}
+	return &stackState{
+		stacks: [][]linalg.Vector{[]linalg.Vector{}},
+		probs:  []float64{1},
+	}
 }
 
 type stackState struct {
@@ -58,7 +61,7 @@ func (s *stackState) RGradient(upstream, upstreamR linalg.Vector) (grad, rgrad l
 	return nil, nil
 }
 
-func (s *stackState) NextState(control linalg.Vector) {
+func (s *stackState) NextState(control linalg.Vector) StructState {
 	softmax := autofunc.Softmax{}
 	flagVar := &autofunc.Variable{Vector: control[:stackFlagCount]}
 	flags := softmax.Apply(flagVar).Output()
@@ -73,34 +76,36 @@ func (s *stackState) NextState(control linalg.Vector) {
 
 	for i, stack := range s.stacks {
 		prob := s.probs[i]
-		s.stacks = append(s.stacks, stack)
-		s.probs = append(s.probs, prob*flags[stackNop])
-		s.stacks = append(s.stacks, pushStack(stack, controlData))
-		s.probs = append(s.probs, prob*flags[stackPush])
-		s.stacks = append(s.stacks, popStack(stack))
-		s.probs = append(s.probs, prob*flags[stackPop])
-		s.stacks = append(s.stacks, replaceStack(stack, controlData))
-		s.probs = append(s.probs, prob*flags[stackReplace])
+		newState.stacks = append(newState.stacks, stack)
+		newState.probs = append(newState.probs, prob*flags[stackNop])
+		newState.stacks = append(newState.stacks, pushStack(stack, controlData))
+		newState.probs = append(newState.probs, prob*flags[stackPush])
+		newState.stacks = append(newState.stacks, popStack(stack))
+		newState.probs = append(newState.probs, prob*flags[stackPop])
+		newState.stacks = append(newState.stacks, replaceStack(stack, controlData))
+		newState.probs = append(newState.probs, prob*flags[stackReplace])
 	}
 
 	newState.data = newState.computeData()
+	return newState
 }
 
 func (s *stackState) computeData() linalg.Vector {
 	var res linalg.Vector
 	for i, stack := range s.stacks {
-		var head linalg.Vector
 		if len(stack) == 0 {
-			head = make(linalg.Vector, len(s.control)-4)
-		} else {
-			head = stack[len(stack)-1]
+			continue
 		}
+		head := stack[len(stack)-1]
 		prob := s.probs[i]
-		if i == 0 {
+		if res == nil {
 			res = head.Copy().Scale(prob)
 		} else {
 			res.Add(head.Copy().Scale(prob))
 		}
+	}
+	if res == nil {
+		return make(linalg.Vector, len(s.control)-stackFlagCount)
 	}
 	return res
 }
@@ -121,7 +126,7 @@ func replaceStack(s []linalg.Vector, x linalg.Vector) []linalg.Vector {
 		return s
 	} else {
 		res := copyStack(s)
-		res = res[:len(res)-1]
+		res[len(res)-1] = x
 		return res
 	}
 }
