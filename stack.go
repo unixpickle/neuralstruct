@@ -123,7 +123,7 @@ func popStack(s []linalg.Vector) []linalg.Vector {
 
 func replaceStack(s []linalg.Vector, x linalg.Vector) []linalg.Vector {
 	if len(s) == 0 {
-		return s
+		return []linalg.Vector{x}
 	} else {
 		res := copyStack(s)
 		res[len(res)-1] = x
