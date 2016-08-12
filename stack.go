@@ -31,7 +31,7 @@ func (s *Stack) DataSize() int {
 }
 
 // StartState returns the empty stack.
-func (s *Stack) StartState() StructState {
+func (s *Stack) StartState() State {
 	return &stackState{
 		stacks: [][]linalg.Vector{[]linalg.Vector{}},
 		probs:  []float64{1},
@@ -53,15 +53,10 @@ func (s *stackState) Data() linalg.Vector {
 
 func (s *stackState) Gradient(upstream linalg.Vector) linalg.Vector {
 	// TODO: this.
-	return nil
+	return make(linalg.Vector, len(s.control))
 }
 
-func (s *stackState) RGradient(upstream, upstreamR linalg.Vector) (grad, rgrad linalg.Vector) {
-	// TODO: this.
-	return nil, nil
-}
-
-func (s *stackState) NextState(control linalg.Vector) StructState {
+func (s *stackState) NextState(control linalg.Vector) State {
 	softmax := autofunc.Softmax{}
 	flagVar := &autofunc.Variable{Vector: control[:stackFlagCount]}
 	flags := softmax.Apply(flagVar).Output()

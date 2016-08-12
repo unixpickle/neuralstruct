@@ -2,8 +2,11 @@ package neuralstruct
 
 import (
 	"math"
+	"math/rand"
 	"testing"
 
+	"github.com/unixpickle/autofunc"
+	"github.com/unixpickle/autofunc/functest"
 	"github.com/unixpickle/num-analysis/linalg"
 )
 
@@ -44,10 +47,10 @@ func TestStackData(t *testing.T) {
 				{0.5, 1, 1.5, 2},
 				{4*(0.3+0.4) + 1*0.5*0.1, 3*(0.3+0.4) + 2*0.5*0.1,
 					2*(0.3+0.4) + 3*0.5*0.1, 1*(0.3+0.4) + 4*0.5*0.1},
-				{0.2*(4*(0.3+0.4) + 1*0.5*0.1) + 1*0.24*0.5*0.3 + 6*(0.3 + 0.26),
-					0.2*(3*(0.3+0.4) + 2*0.5*0.1) + 2*0.24*0.5*0.3 + 7*(0.3 + 0.26),
-					0.2*(2*(0.3+0.4) + 3*0.5*0.1) + 3*0.24*0.5*0.3 + 8*(0.3 + 0.26),
-					0.2*(1*(0.3+0.4) + 4*0.5*0.1) + 4*0.24*0.5*0.3 + 9*(0.3 + 0.26)},
+				{0.2*(4*(0.3+0.4)+1*0.5*0.1) + 1*0.24*0.5*0.3 + 6*(0.3+0.26),
+					0.2*(3*(0.3+0.4)+2*0.5*0.1) + 2*0.24*0.5*0.3 + 7*(0.3+0.26),
+					0.2*(2*(0.3+0.4)+3*0.5*0.1) + 3*0.24*0.5*0.3 + 8*(0.3+0.26),
+					0.2*(1*(0.3+0.4)+4*0.5*0.1) + 4*0.24*0.5*0.3 + 9*(0.3+0.26)},
 			},
 		},
 	}
@@ -66,6 +69,21 @@ func TestStackData(t *testing.T) {
 	}
 }
 
+func TestStackGradient(t *testing.T) {
+	f, ctrl := stackTestFunc()
+	inVec := make(linalg.Vector, ctrl)
+	for i := range inVec {
+		inVec[i] = rand.NormFloat64()
+	}
+	inVar := &autofunc.Variable{Vector: inVec}
+	test := functest.FuncTest{
+		F:     f,
+		Vars:  []*autofunc.Variable{inVar},
+		Input: inVar,
+	}
+	test.Run(t)
+}
+
 func statesEqual(d1, d2 linalg.Vector) bool {
 	if len(d1) != len(d2) {
 		return false
@@ -76,4 +94,18 @@ func statesEqual(d1, d2 linalg.Vector) bool {
 		}
 	}
 	return true
+}
+
+func stackTestFunc() (funcOut autofunc.Func, ctrlSize int) {
+	ops := []stackDataOp{
+		{0.25, 0.25, 0.25, 0.25, []float64{1, 2, 3, 4}},
+		{0.1, 0.3, 0.2, 0.4, []float64{4, 3, 2, 1}},
+		{0.2, 0.3, 0.24, 0.26, []float64{6, 7, 8, 9}},
+	}
+	stack := Stack{VectorSize: 4}
+	state := stack.StartState()
+	for _, op := range ops {
+		state = state.NextState(op.Control())
+	}
+	return &structFunc{StartState: state}, stack.ControlSize()
 }
