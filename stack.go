@@ -32,23 +32,21 @@ func (s *Stack) DataSize() int {
 
 // StartState returns the empty stack.
 func (s *Stack) StartState() State {
-	return &stackState{
-		stacks: [][]linalg.Vector{[]linalg.Vector{}},
-		probs:  []float64{1},
-	}
+	return &stackState{vecSize: s.VectorSize}
 }
 
 type stackState struct {
-	// TODO: optimize not to be exponential in storage.
-	last    *stackState
-	stacks  [][]linalg.Vector
-	probs   linalg.Vector
-	control linalg.Vector
-	data    linalg.Vector
+	last     *stackState
+	vecSize  int
+	expected []linalg.Vector
+	control  linalg.Vector
 }
 
 func (s *stackState) Data() linalg.Vector {
-	return s.data
+	if len(s.expected) == 0 {
+		return make(linalg.Vector, s.vecSize)
+	}
+	return s.expected[0]
 }
 
 func (s *stackState) Gradient(upstream linalg.Vector) linalg.Vector {
@@ -63,71 +61,33 @@ func (s *stackState) NextState(control linalg.Vector) State {
 	controlData := control[stackFlagCount:]
 
 	newState := &stackState{
-		last:    s,
-		stacks:  nil,
-		probs:   nil,
-		control: control,
+		last:     s,
+		vecSize:  s.vecSize,
+		expected: make([]linalg.Vector, len(s.expected)+1),
+		control:  s.control,
 	}
 
-	for i, stack := range s.stacks {
-		prob := s.probs[i]
-		newState.stacks = append(newState.stacks, stack)
-		newState.probs = append(newState.probs, prob*flags[stackNop])
-		newState.stacks = append(newState.stacks, pushStack(stack, controlData))
-		newState.probs = append(newState.probs, prob*flags[stackPush])
-		newState.stacks = append(newState.stacks, popStack(stack))
-		newState.probs = append(newState.probs, prob*flags[stackPop])
-		newState.stacks = append(newState.stacks, replaceStack(stack, controlData))
-		newState.probs = append(newState.probs, prob*flags[stackReplace])
+	for i, v := range s.expected {
+		newState.expected[i] = make(linalg.Vector, len(v))
+		copy(newState.expected[i], s.expected[i])
+		scaler := flags[stackNop]
+		if i != 0 {
+			scaler += flags[stackReplace]
+		}
+		newState.expected[i].Scale(scaler)
+	}
+	newState.expected[len(s.expected)] = make(linalg.Vector, s.vecSize)
+
+	if len(s.expected) > 0 {
+		for i, v := range s.expected[1:] {
+			newState.expected[i].Add(v.Copy().Scale(flags[stackPop]))
+		}
 	}
 
-	newState.data = newState.computeData()
+	newState.expected[0].Add(controlData.Copy().Scale(flags[stackPush] + flags[stackReplace]))
+	for i, v := range s.expected {
+		newState.expected[i+1].Add(v.Copy().Scale(flags[stackPush]))
+	}
+
 	return newState
-}
-
-func (s *stackState) computeData() linalg.Vector {
-	var res linalg.Vector
-	for i, stack := range s.stacks {
-		if len(stack) == 0 {
-			continue
-		}
-		head := stack[len(stack)-1]
-		prob := s.probs[i]
-		if res == nil {
-			res = head.Copy().Scale(prob)
-		} else {
-			res.Add(head.Copy().Scale(prob))
-		}
-	}
-	if res == nil {
-		return make(linalg.Vector, len(s.control)-stackFlagCount)
-	}
-	return res
-}
-
-func pushStack(s []linalg.Vector, x linalg.Vector) []linalg.Vector {
-	return append(copyStack(s), x)
-}
-
-func popStack(s []linalg.Vector) []linalg.Vector {
-	if len(s) == 0 {
-		return nil
-	}
-	return s[:len(s)-1]
-}
-
-func replaceStack(s []linalg.Vector, x linalg.Vector) []linalg.Vector {
-	if len(s) == 0 {
-		return []linalg.Vector{x}
-	} else {
-		res := copyStack(s)
-		res[len(res)-1] = x
-		return res
-	}
-}
-
-func copyStack(s []linalg.Vector) []linalg.Vector {
-	res := make([]linalg.Vector, len(s))
-	copy(res, s)
-	return res
 }
