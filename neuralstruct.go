@@ -52,7 +52,8 @@ type State interface {
 // An RState is like a State, but with support for the
 // r-operator.
 type RState interface {
-	State
+	// Data returns the data for this timestep.
+	Data() linalg.Vector
 
 	// RData returns the r-operator of the state's data.
 	RData() linalg.Vector
