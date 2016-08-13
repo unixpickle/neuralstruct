@@ -20,9 +20,9 @@ func (s *structFunc) Apply(in autofunc.Result) autofunc.Result {
 	state := s.Struct.StartState()
 	for i := 0; i < len(in.Output()); i += s.Struct.ControlSize() {
 		control := in.Output()[i : i+s.Struct.ControlSize()]
-		out := state.NextState(control)
-		outputs = append(outputs, out)
-		joinedData = append(joinedData, out.Data()...)
+		state = state.NextState(control)
+		outputs = append(outputs, state)
+		joinedData = append(joinedData, state.Data()...)
 	}
 	return &structFuncRes{
 		Outputs:    outputs,
