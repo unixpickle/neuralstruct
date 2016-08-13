@@ -52,9 +52,9 @@ func (s *structFuncRes) PropagateGradient(upstream linalg.Vector, g autofunc.Gra
 
 	controlGrad := make(linalg.Vector, len(s.Controls.Output()))
 	sourceIdx := len(upstream)
+	destIdx := len(controlGrad) - len(controlGrad)/len(s.Outputs)
 
 	var stateUpstream Grad
-	var destIdx int
 	for t := len(s.Outputs) - 1; t >= 0; t-- {
 		out := s.Outputs[t]
 		upstreamPart := upstream[sourceIdx-len(out.Data()) : sourceIdx]
@@ -63,7 +63,7 @@ func (s *structFuncRes) PropagateGradient(upstream linalg.Vector, g autofunc.Gra
 		var downstreamPart linalg.Vector
 		downstreamPart, stateUpstream = out.Gradient(upstreamPart, stateUpstream)
 		copy(controlGrad[destIdx:], downstreamPart)
-		destIdx += len(downstreamPart)
+		destIdx -= len(downstreamPart)
 	}
 
 	s.Controls.PropagateGradient(controlGrad, g)

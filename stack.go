@@ -49,9 +49,70 @@ func (s *stackState) Data() linalg.Vector {
 	return s.expected[0]
 }
 
-func (s *stackState) Gradient(dataGrad linalg.Vector, upstream Grad) (linalg.Vector, Grad) {
-	// TODO: this.
-	return make(linalg.Vector, len(s.control)), nil
+func (s *stackState) Gradient(dataGrad linalg.Vector, upstreamGrad Grad) (linalg.Vector, Grad) {
+	if s.last == nil {
+		panic("cannot propagate through start state")
+	}
+
+	var upstream []linalg.Vector
+	if upstreamGrad != nil {
+		upstream = upstreamGrad.([]linalg.Vector)
+		upstream[0].Add(dataGrad)
+	} else {
+		upstream = make([]linalg.Vector, len(s.expected))
+		upstream[0] = dataGrad
+		zeroGrad := make(linalg.Vector, len(dataGrad))
+		for i := 1; i < len(upstream); i++ {
+			upstream[i] = zeroGrad
+		}
+	}
+
+	softmax := autofunc.Softmax{}
+	flagVar := &autofunc.Variable{Vector: s.control[:stackFlagCount]}
+	flagRes := softmax.Apply(flagVar)
+	flags := flagRes.Output()
+	controlData := s.control[stackFlagCount:]
+
+	flagsDownstream := make(linalg.Vector, len(flags))
+	downstream := make([]linalg.Vector, len(s.last.expected))
+
+	for i, v := range s.last.expected {
+		scaler := flags[stackNop]
+		if i != 0 {
+			scaler += flags[stackReplace]
+		}
+		downstream[i] = upstream[i].Copy().Scale(scaler)
+
+		gradDot := v.Dot(upstream[i])
+		flagsDownstream[stackNop] += gradDot
+		if i != 0 {
+			flagsDownstream[stackReplace] += gradDot
+		}
+	}
+
+	if len(s.last.expected) > 0 {
+		for i, v := range s.last.expected[1:] {
+			downstream[i+1].Add(upstream[i].Copy().Scale(flags[stackPop]))
+			flagsDownstream[stackPop] += upstream[i].Dot(v)
+		}
+	}
+
+	controlDataDownstream := upstream[0].Copy().Scale(flags[stackPush] + flags[stackReplace])
+	pushReplaceDot := upstream[0].Dot(controlData)
+	flagsDownstream[stackPush] += pushReplaceDot
+	flagsDownstream[stackReplace] += pushReplaceDot
+
+	for i, v := range s.last.expected {
+		downstream[i].Add(upstream[i+1].Copy().Scale(flags[stackPush]))
+		flagsDownstream[stackPush] += upstream[i+1].Dot(v)
+	}
+
+	controlDownstream := make(linalg.Vector, len(s.control))
+	copy(controlDownstream[stackFlagCount:], controlDataDownstream)
+	flagGrad := autofunc.Gradient{flagVar: controlDownstream[:stackFlagCount]}
+	flagRes.PropagateGradient(flagsDownstream, flagGrad)
+
+	return controlDownstream, downstream
 }
 
 func (s *stackState) NextState(control linalg.Vector) State {
@@ -64,7 +125,7 @@ func (s *stackState) NextState(control linalg.Vector) State {
 		last:     s,
 		vecSize:  s.vecSize,
 		expected: make([]linalg.Vector, len(s.expected)+1),
-		control:  s.control,
+		control:  control,
 	}
 
 	for i, v := range s.expected {

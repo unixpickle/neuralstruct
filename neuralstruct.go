@@ -34,10 +34,14 @@ type State interface {
 	Data() linalg.Vector
 
 	// Gradient propagates a gradient through this state.
-	// It takes the gradient of the Data, as well as an
+	// It takes the gradient of the data, as well as an
 	// optional Grad for the next state.
 	// If upstream is nil, it is assumed that the next
 	// state has no effect on the gradient's variable.
+	//
+	// The upstream Grad should not be used again after
+	// this call, since the object's memory may be used
+	// as scratch or reused as the return value.
 	Gradient(dataGrad linalg.Vector, upstream Grad) (linalg.Vector, Grad)
 
 	// NextState computes the next state after applying the
@@ -55,6 +59,9 @@ type RState interface {
 
 	// RGradient is like Gradient, but it computes both the
 	// gradient and the r-gradient.
+	//
+	// The upstream RGrad should not be used again after
+	// this call.
 	RGradient(dataGrad, dataGradR linalg.Vector, upstream RGrad) (grad, rgrad linalg.Vector,
 		downstream RGrad)
 
