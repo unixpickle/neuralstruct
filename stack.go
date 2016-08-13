@@ -1,8 +1,11 @@
 package neuralstruct
 
 import (
+	"fmt"
+
 	"github.com/unixpickle/autofunc"
 	"github.com/unixpickle/num-analysis/linalg"
+	"github.com/unixpickle/serializer"
 )
 
 const stackFlagCount = 4
@@ -14,9 +17,27 @@ const (
 	stackReplace
 )
 
+func init() {
+	s := &Stack{}
+	serializer.RegisterTypedDeserializer(s.SerializerType(), DeserializeStack)
+}
+
 // Stack is a Struct which implements a stack of vectors.
 type Stack struct {
 	VectorSize int
+}
+
+// DeserializeStack deserializes a Stack.
+func DeserializeStack(d []byte) (*Stack, error) {
+	intData, err := serializer.DeserializeWithType(d)
+	if err != nil {
+		return nil, err
+	}
+	num, ok := intData.(serializer.Int)
+	if !ok {
+		return nil, fmt.Errorf("expected serializer.Int but got %T", intData)
+	}
+	return &Stack{VectorSize: int(num)}, nil
 }
 
 // ControlSize returns the number of control components,
@@ -38,6 +59,17 @@ func (s *Stack) StartState() State {
 // StartRState returns the empty stack.
 func (s *Stack) StartRState() RState {
 	return &stackRState{vecSize: s.VectorSize}
+}
+
+// SerializerType returns the unique ID for serializing
+// stacks with the serializer package.
+func (s *Stack) SerializerType() string {
+	return "github.com/unixpickle/neuralstruct.Stack"
+}
+
+// Serialize serializes the stack's parameters.
+func (s *Stack) Serialize() ([]byte, error) {
+	return serializer.SerializeWithType(Int(s.VectorSize))
 }
 
 type stackState struct {
