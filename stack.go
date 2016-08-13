@@ -173,10 +173,10 @@ func (s *stackRState) Data() linalg.Vector {
 }
 
 func (s *stackRState) RData() linalg.Vector {
-	if len(s.expected) == 0 {
+	if len(s.expectedR) == 0 {
 		return make(linalg.Vector, s.vecSize)
 	}
-	return s.expected[0]
+	return s.expectedR[0]
 }
 
 func (s *stackRState) RGradient(dataGrad, dataGradR linalg.Vector,
