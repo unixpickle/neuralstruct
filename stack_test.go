@@ -71,7 +71,22 @@ func TestStackData(t *testing.T) {
 	}
 }
 
-func TestStackGradient(t *testing.T) {
+func TestStackDeepGradient(t *testing.T) {
+	f, ctrl := stackTestFunc()
+	inVec := make(linalg.Vector, ctrl*4)
+	for i := range inVec {
+		inVec[i] = rand.NormFloat64()
+	}
+	inVar := &autofunc.Variable{Vector: inVec}
+	test := functest.FuncTest{
+		F:     f,
+		Vars:  []*autofunc.Variable{inVar},
+		Input: inVar,
+	}
+	test.Run(t)
+}
+
+func TestStackShallowGradient(t *testing.T) {
 	f, ctrl := stackTestFunc()
 	inVec := make(linalg.Vector, ctrl)
 	for i := range inVec {
@@ -100,5 +115,5 @@ func statesEqual(d1, d2 linalg.Vector) bool {
 
 func stackTestFunc() (funcOut autofunc.Func, inSize int) {
 	res := &structFunc{Struct: &Stack{VectorSize: 4}}
-	return res, res.Struct.ControlSize() * 4
+	return res, res.Struct.ControlSize()
 }
