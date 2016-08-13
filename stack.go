@@ -35,6 +35,11 @@ func (s *Stack) StartState() State {
 	return &stackState{vecSize: s.VectorSize}
 }
 
+// StartRState returns the empty stack.
+func (s *Stack) StartRState() RState {
+	return &stackRState{vecSize: s.VectorSize}
+}
+
 type stackState struct {
 	last     *stackState
 	vecSize  int
@@ -129,13 +134,11 @@ func (s *stackState) NextState(control linalg.Vector) State {
 	}
 
 	for i, v := range s.expected {
-		newState.expected[i] = make(linalg.Vector, len(v))
-		copy(newState.expected[i], s.expected[i])
 		scaler := flags[stackNop]
 		if i != 0 {
 			scaler += flags[stackReplace]
 		}
-		newState.expected[i].Scale(scaler)
+		newState.expected[i] = v.Copy().Scale(scaler)
 	}
 	newState.expected[len(s.expected)] = make(linalg.Vector, s.vecSize)
 
@@ -148,6 +151,96 @@ func (s *stackState) NextState(control linalg.Vector) State {
 	newState.expected[0].Add(controlData.Copy().Scale(flags[stackPush] + flags[stackReplace]))
 	for i, v := range s.expected {
 		newState.expected[i+1].Add(v.Copy().Scale(flags[stackPush]))
+	}
+
+	return newState
+}
+
+type stackRState struct {
+	last      *stackRState
+	vecSize   int
+	expected  []linalg.Vector
+	expectedR []linalg.Vector
+	control   linalg.Vector
+	controlR  linalg.Vector
+}
+
+func (s *stackRState) Data() linalg.Vector {
+	if len(s.expected) == 0 {
+		return make(linalg.Vector, s.vecSize)
+	}
+	return s.expected[0]
+}
+
+func (s *stackRState) RData() linalg.Vector {
+	if len(s.expected) == 0 {
+		return make(linalg.Vector, s.vecSize)
+	}
+	return s.expected[0]
+}
+
+func (s *stackRState) RGradient(dataGrad, dataGradR linalg.Vector,
+	upstreamGrad RGrad) (linalg.Vector, linalg.Vector, RGrad) {
+	// TODO: this.
+	zeroVec := make(linalg.Vector, 4+s.vecSize)
+	return zeroVec, zeroVec, nil
+}
+
+func (s *stackRState) NextRState(control, controlR linalg.Vector) RState {
+	softmax := autofunc.Softmax{}
+	flagVar := &autofunc.Variable{Vector: control[:stackFlagCount]}
+	flagRVar := &autofunc.RVariable{
+		Variable:   flagVar,
+		ROutputVec: controlR[:stackFlagCount],
+	}
+	flagRes := softmax.ApplyR(autofunc.RVector{}, flagRVar)
+	flags := flagRes.Output()
+	flagsR := flagRes.ROutput()
+	controlData := control[stackFlagCount:]
+	controlDataR := controlR[stackFlagCount:]
+
+	newState := &stackRState{
+		last:      s,
+		vecSize:   s.vecSize,
+		expected:  make([]linalg.Vector, len(s.expected)+1),
+		expectedR: make([]linalg.Vector, len(s.expected)+1),
+		control:   control,
+		controlR:  controlR,
+	}
+
+	for i, v := range s.expected {
+		vR := s.expectedR[i]
+
+		scaler := flags[stackNop]
+		scalerR := flagsR[stackNop]
+		if i != 0 {
+			scaler += flags[stackReplace]
+			scalerR += flagsR[stackReplace]
+		}
+
+		newState.expected[i] = v.Copy().Scale(scaler)
+		newState.expectedR[i] = v.Copy().Scale(scalerR).Add(vR.Copy().Scale(scaler))
+	}
+	newState.expected[len(s.expected)] = make(linalg.Vector, s.vecSize)
+	newState.expectedR[len(s.expected)] = make(linalg.Vector, s.vecSize)
+
+	if len(s.expected) > 0 {
+		for i, v := range s.expected[1:] {
+			vR := s.expectedR[i+1]
+			newState.expected[i].Add(v.Copy().Scale(flags[stackPop]))
+			newState.expectedR[i].Add(v.Copy().Scale(flagsR[stackPop]))
+			newState.expectedR[i].Add(vR.Copy().Scale(flags[stackPop]))
+		}
+	}
+
+	newState.expected[0].Add(controlData.Copy().Scale(flags[stackPush] + flags[stackReplace]))
+	newState.expectedR[0].Add(controlDataR.Copy().Scale(flags[stackPush] + flags[stackReplace]))
+	newState.expectedR[0].Add(controlData.Copy().Scale(flagsR[stackPush] + flagsR[stackReplace]))
+	for i, v := range s.expected {
+		vR := s.expectedR[i]
+		newState.expected[i+1].Add(v.Copy().Scale(flags[stackPush]))
+		newState.expectedR[i+1].Add(vR.Copy().Scale(flags[stackPush]))
+		newState.expectedR[i+1].Add(v.Copy().Scale(flagsR[stackPush]))
 	}
 
 	return newState
