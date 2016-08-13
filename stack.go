@@ -49,9 +49,9 @@ func (s *stackState) Data() linalg.Vector {
 	return s.expected[0]
 }
 
-func (s *stackState) Gradient(upstream linalg.Vector) linalg.Vector {
+func (s *stackState) Gradient(dataGrad linalg.Vector, upstream Grad) (linalg.Vector, Grad) {
 	// TODO: this.
-	return make(linalg.Vector, len(s.control))
+	return make(linalg.Vector, len(s.control)), nil
 }
 
 func (s *stackState) NextState(control linalg.Vector) State {

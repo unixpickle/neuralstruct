@@ -98,16 +98,7 @@ func statesEqual(d1, d2 linalg.Vector) bool {
 	return true
 }
 
-func stackTestFunc() (funcOut autofunc.Func, ctrlSize int) {
-	ops := []stackDataOp{
-		{0.25, 0.25, 0.25, 0.25, []float64{1, 2, 3, 4}},
-		{0.1, 0.3, 0.2, 0.4, []float64{4, 3, 2, 1}},
-		{0.2, 0.3, 0.24, 0.26, []float64{6, 7, 8, 9}},
-	}
-	stack := Stack{VectorSize: 4}
-	state := stack.StartState()
-	for _, op := range ops {
-		state = state.NextState(op.Control())
-	}
-	return &structFunc{StartState: state}, stack.ControlSize()
+func stackTestFunc() (funcOut autofunc.Func, inSize int) {
+	res := &structFunc{Struct: &Stack{VectorSize: 4}}
+	return res, res.Struct.ControlSize() * 4
 }
