@@ -40,45 +40,57 @@ func (s *SeqFunc) BatchSeqs(seqs [][]autofunc.Result) rnn.ResultSeqs {
 	var res seqFuncOutput
 	res.PackedOut = make([][]linalg.Vector, len(seqs))
 
-	zeroStateVec := make(linalg.Vector, r.Block.StateSize())
-
-	// TODO: integrate the underlying states from the struct.
-	// This was taken from rnn_seq_func.go in weakai/rnn.
+	zeroStateVec := make(linalg.Vector, s.Block.StateSize())
 
 	var t int
 	for {
 		step := &seqFuncOutputStep{
 			InStateVars: make([]*autofunc.Variable, len(seqs)),
-			InStates:    make([]State, len(seqs)),
 			InputVars:   make([]*autofunc.Variable, len(seqs)),
 			Inputs:      make([]autofunc.Result, len(seqs)),
 			LaneToOut:   map[int]int{},
 		}
-		var input BlockInput
+		var input rnn.BlockInput
+		var inputStates []State
 		for l, seq := range seqs {
 			if len(seq) <= t {
 				continue
 			}
 			step.LaneToOut[l] = len(input.Inputs)
 			step.Inputs[l] = seq[t]
-			step.InputVars[l] = &autofunc.Variable{Vector: seq[t].Output()}
-			step.InStateVars[l] = &autofunc.Variable{Vector: zeroStateVec}
+			var lastState State
+			var lastStateVec linalg.Vector
 			if t > 0 {
-				s := res.Steps[t-1]
-				step.InStateVars[l].Vector = s.Outputs.States()[s.LaneToOut[l]]
+				last := res.Steps[t-1]
+				lastState = last.OutStates[last.LaneToOut[l]]
+				lastStateVec = last.Outputs.States()[last.LaneToOut[l]]
 			} else {
-
+				lastState = s.Struct.StartState()
+				lastStateVec = zeroStateVec
 			}
+			inputStates = append(inputStates, lastState)
+			inVec := make(linalg.Vector, len(lastState.Data())+len(seq[t].Output()))
+			copy(inVec, lastState.Data())
+			copy(inVec[len(lastState.Data()):], seq[t].Output())
+			step.InputVars[l] = &autofunc.Variable{Vector: inVec}
+			step.InStateVars[l] = &autofunc.Variable{Vector: lastStateVec}
 			input.Inputs = append(input.Inputs, step.InputVars[l])
 			input.States = append(input.States, step.InStateVars[l])
 		}
 		if len(step.LaneToOut) == 0 {
 			break
 		}
-		step.Outputs = r.Block.Batch(&input)
+		step.Outputs = s.Block.Batch(&input)
+		for i, inState := range inputStates {
+			outVec := step.Outputs.Outputs()[i]
+			ctrl := outVec[:s.Struct.ControlSize()]
+			step.OutStates = append(step.OutStates, inState.NextState(ctrl))
+		}
 		res.Steps = append(res.Steps, step)
 		for l, outIdx := range step.LaneToOut {
-			res.PackedOut[l] = append(res.PackedOut[l], step.Outputs.Outputs()[outIdx])
+			outVec := step.Outputs.Outputs()[outIdx]
+			outData := outVec[s.Struct.ControlSize():]
+			res.PackedOut[l] = append(res.PackedOut[l], outData)
 		}
 		t++
 	}
@@ -126,10 +138,9 @@ func (s *SeqFunc) Serialize() ([]byte, error) {
 }
 
 type seqFuncOutputStep struct {
-	// These four variables always have len equal to
+	// These three variables always have len equal to
 	// the number of lanes (some entries may be nil).
 	InStateVars []*autofunc.Variable
-	InStates    []State
 	InputVars   []*autofunc.Variable
 	Inputs      []autofunc.Result
 

@@ -69,7 +69,7 @@ func (s *Stack) SerializerType() string {
 
 // Serialize serializes the stack's parameters.
 func (s *Stack) Serialize() ([]byte, error) {
-	return serializer.SerializeWithType(Int(s.VectorSize))
+	return serializer.SerializeWithType(serializer.Int(s.VectorSize))
 }
 
 type stackState struct {
