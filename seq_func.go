@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/unixpickle/autofunc"
+	"github.com/unixpickle/num-analysis/linalg"
 	"github.com/unixpickle/serializer"
 	"github.com/unixpickle/sgd"
 	"github.com/unixpickle/weakai/rnn"
@@ -36,8 +37,53 @@ func DeserializeSeqFunc(d []byte) (*SeqFunc, error) {
 
 // BatchSeqs applies s to a list of sequences.
 func (s *SeqFunc) BatchSeqs(seqs [][]autofunc.Result) rnn.ResultSeqs {
-	// TODO: this.
-	return nil
+	var res seqFuncOutput
+	res.PackedOut = make([][]linalg.Vector, len(seqs))
+
+	zeroStateVec := make(linalg.Vector, r.Block.StateSize())
+
+	// TODO: integrate the underlying states from the struct.
+	// This was taken from rnn_seq_func.go in weakai/rnn.
+
+	var t int
+	for {
+		step := &seqFuncOutputStep{
+			InStateVars: make([]*autofunc.Variable, len(seqs)),
+			InStates:    make([]State, len(seqs)),
+			InputVars:   make([]*autofunc.Variable, len(seqs)),
+			Inputs:      make([]autofunc.Result, len(seqs)),
+			LaneToOut:   map[int]int{},
+		}
+		var input BlockInput
+		for l, seq := range seqs {
+			if len(seq) <= t {
+				continue
+			}
+			step.LaneToOut[l] = len(input.Inputs)
+			step.Inputs[l] = seq[t]
+			step.InputVars[l] = &autofunc.Variable{Vector: seq[t].Output()}
+			step.InStateVars[l] = &autofunc.Variable{Vector: zeroStateVec}
+			if t > 0 {
+				s := res.Steps[t-1]
+				step.InStateVars[l].Vector = s.Outputs.States()[s.LaneToOut[l]]
+			} else {
+
+			}
+			input.Inputs = append(input.Inputs, step.InputVars[l])
+			input.States = append(input.States, step.InStateVars[l])
+		}
+		if len(step.LaneToOut) == 0 {
+			break
+		}
+		step.Outputs = r.Block.Batch(&input)
+		res.Steps = append(res.Steps, step)
+		for l, outIdx := range step.LaneToOut {
+			res.PackedOut[l] = append(res.PackedOut[l], step.Outputs.Outputs()[outIdx])
+		}
+		t++
+	}
+
+	return &res
 }
 
 // BatchSeqsR applies s to a list of sequences.
@@ -77,4 +123,33 @@ func (s *SeqFunc) Serialize() ([]byte, error) {
 	}
 	list := []serializer.Serializer{blockSerializer, structSerializer}
 	return serializer.SerializeSlice(list)
+}
+
+type seqFuncOutputStep struct {
+	// These four variables always have len equal to
+	// the number of lanes (some entries may be nil).
+	InStateVars []*autofunc.Variable
+	InStates    []State
+	InputVars   []*autofunc.Variable
+	Inputs      []autofunc.Result
+
+	Outputs   rnn.BlockOutput
+	OutStates []State
+
+	// LaneToOut maps lane indices to indices in Outputs.
+	LaneToOut map[int]int
+}
+
+type seqFuncOutput struct {
+	Steps     []*seqFuncOutputStep
+	PackedOut [][]linalg.Vector
+}
+
+func (s *seqFuncOutput) OutputSeqs() [][]linalg.Vector {
+	return s.PackedOut
+}
+
+func (s *seqFuncOutput) Gradient(upstream [][]linalg.Vector, g autofunc.Gradient) {
+	// TODO: this.
+	panic("not yet implemented.")
 }
