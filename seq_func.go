@@ -12,10 +12,10 @@ import (
 )
 
 // SeqFunc is an rnn.SeqFunc which wraps an rnn.Block
-// and gives the block access to a Struct.
+// and gives the block access to an RStruct.
 type SeqFunc struct {
 	Block  rnn.Block
-	Struct Struct
+	Struct RStruct
 }
 
 // DeserializeSeqFunc deserializes a SeqFunc.
@@ -28,7 +28,7 @@ func DeserializeSeqFunc(d []byte) (*SeqFunc, error) {
 		return nil, errors.New("invalid SeqFunc slice")
 	}
 	block, ok1 := slice[0].(rnn.Block)
-	structure, ok2 := slice[1].(Struct)
+	structure, ok2 := slice[1].(RStruct)
 	if !ok1 || !ok2 {
 		return nil, errors.New("invalid SeqFunc slice")
 	}
@@ -100,8 +100,83 @@ func (s *SeqFunc) BatchSeqs(seqs [][]autofunc.Result) rnn.ResultSeqs {
 
 // BatchSeqsR applies s to a list of sequences.
 func (s *SeqFunc) BatchSeqsR(rv autofunc.RVector, seqs [][]autofunc.RResult) rnn.RResultSeqs {
-	// TODO: this.
-	return nil
+	var res seqFuncROutput
+	res.PackedOut = make([][]linalg.Vector, len(seqs))
+	res.RPackedOut = make([][]linalg.Vector, len(seqs))
+
+	zeroStateVec := make(linalg.Vector, s.Block.StateSize())
+
+	var t int
+	for {
+		step := &seqFuncROutputStep{
+			InStateVars: make([]*autofunc.RVariable, len(seqs)),
+			InputVars:   make([]*autofunc.RVariable, len(seqs)),
+			Inputs:      make([]autofunc.RResult, len(seqs)),
+			LaneToOut:   map[int]int{},
+		}
+		var input rnn.BlockRInput
+		var inputStates []RState
+		for l, seq := range seqs {
+			if len(seq) <= t {
+				continue
+			}
+			step.LaneToOut[l] = len(input.Inputs)
+			step.Inputs[l] = seq[t]
+			var lastState RState
+			var lastStateVec linalg.Vector
+			var lastStateVecR linalg.Vector
+			if t > 0 {
+				last := res.Steps[t-1]
+				lastState = last.OutStates[last.LaneToOut[l]]
+				lastStateVec = last.Outputs.States()[last.LaneToOut[l]]
+				lastStateVecR = last.Outputs.RStates()[last.LaneToOut[l]]
+			} else {
+				lastState = s.Struct.StartRState()
+				lastStateVec = zeroStateVec
+				lastStateVecR = zeroStateVec
+			}
+			inputStates = append(inputStates, lastState)
+			inVec := make(linalg.Vector, len(lastState.Data())+len(seq[t].Output()))
+			copy(inVec, lastState.Data())
+			copy(inVec[len(lastState.Data()):], seq[t].Output())
+			inVecR := make(linalg.Vector, len(lastState.Data())+len(seq[t].Output()))
+			copy(inVec, lastState.RData())
+			copy(inVec[len(lastState.RData()):], seq[t].ROutput())
+			step.InputVars[l] = &autofunc.RVariable{
+				Variable:   &autofunc.Variable{Vector: inVec},
+				ROutputVec: inVecR,
+			}
+			step.InStateVars[l] = &autofunc.RVariable{
+				Variable:   &autofunc.Variable{Vector: lastStateVec},
+				ROutputVec: lastStateVecR,
+			}
+			input.Inputs = append(input.Inputs, step.InputVars[l])
+			input.States = append(input.States, step.InStateVars[l])
+		}
+		if len(step.LaneToOut) == 0 {
+			break
+		}
+		step.Outputs = s.Block.BatchR(rv, &input)
+		for i, inState := range inputStates {
+			outVec := step.Outputs.Outputs()[i]
+			outVecR := step.Outputs.ROutputs()[i]
+			ctrl := outVec[:s.Struct.ControlSize()]
+			ctrlR := outVecR[:s.Struct.ControlSize()]
+			step.OutStates = append(step.OutStates, inState.NextRState(ctrl, ctrlR))
+		}
+		res.Steps = append(res.Steps, step)
+		for l, outIdx := range step.LaneToOut {
+			outVec := step.Outputs.Outputs()[outIdx]
+			outVecR := step.Outputs.Outputs()[outIdx]
+			outData := outVec[s.Struct.ControlSize():]
+			outDataR := outVecR[s.Struct.ControlSize():]
+			res.PackedOut[l] = append(res.PackedOut[l], outData)
+			res.RPackedOut[l] = append(res.RPackedOut[l], outDataR)
+		}
+		t++
+	}
+
+	return &res
 }
 
 // Parameters returns the underlying block's parameters
@@ -161,6 +236,40 @@ func (s *seqFuncOutput) OutputSeqs() [][]linalg.Vector {
 }
 
 func (s *seqFuncOutput) Gradient(upstream [][]linalg.Vector, g autofunc.Gradient) {
+	// TODO: this.
+	panic("not yet implemented.")
+}
+
+type seqFuncROutputStep struct {
+	// These three variables always have len equal to
+	// the number of lanes (some entries may be nil).
+	InStateVars []*autofunc.RVariable
+	InputVars   []*autofunc.RVariable
+	Inputs      []autofunc.RResult
+
+	Outputs   rnn.BlockROutput
+	OutStates []RState
+
+	// LaneToOut maps lane indices to indices in Outputs.
+	LaneToOut map[int]int
+}
+
+type seqFuncROutput struct {
+	Steps      []*seqFuncROutputStep
+	PackedOut  [][]linalg.Vector
+	RPackedOut [][]linalg.Vector
+}
+
+func (s *seqFuncROutput) OutputSeqs() [][]linalg.Vector {
+	return s.PackedOut
+}
+
+func (s *seqFuncROutput) ROutputSeqs() [][]linalg.Vector {
+	return s.RPackedOut
+}
+
+func (s *seqFuncROutput) RGradient(upstream, upstreamR [][]linalg.Vector,
+	rg autofunc.RGradient, g autofunc.Gradient) {
 	// TODO: this.
 	panic("not yet implemented.")
 }
