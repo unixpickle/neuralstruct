@@ -51,3 +51,26 @@ func (r *Runner) StepTime(input linalg.Vector) linalg.Vector {
 
 	return outVec
 }
+
+// RunAll applies the RNN to a batch of sequences.
+// It does not affect the state used by StepTime.
+func (r *Runner) RunAll(seqs [][]linalg.Vector) [][]linalg.Vector {
+	seqReses := make([][]autofunc.Result, len(seqs))
+	for lane, seq := range seqs {
+		seqReses[lane] = make([]autofunc.Result, len(seq))
+		for t, v := range seq {
+			seqReses[lane][t] = &autofunc.Variable{Vector: v}
+		}
+	}
+	sf := SeqFunc{Block: r.Block, Struct: &nopRStruct{r.Struct}}
+	output := sf.BatchSeqs(seqReses)
+	return output.OutputSeqs()
+}
+
+type nopRStruct struct {
+	Struct
+}
+
+func (n *nopRStruct) StartRState() RState {
+	panic("StartRState not available")
+}
