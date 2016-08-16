@@ -136,12 +136,15 @@ func (s *SeqFunc) BatchSeqsR(rv autofunc.RVector, seqs [][]autofunc.RResult) rnn
 				lastStateVecR = zeroStateVec
 			}
 			inputStates = append(inputStates, lastState)
+
 			inVec := make(linalg.Vector, len(lastState.Data())+len(seq[t].Output()))
 			copy(inVec, lastState.Data())
 			copy(inVec[len(lastState.Data()):], seq[t].Output())
-			inVecR := make(linalg.Vector, len(lastState.Data())+len(seq[t].Output()))
-			copy(inVec, lastState.RData())
-			copy(inVec[len(lastState.RData()):], seq[t].ROutput())
+
+			inVecR := make(linalg.Vector, len(lastState.RData())+len(seq[t].ROutput()))
+			copy(inVecR, lastState.RData())
+			copy(inVecR[len(lastState.RData()):], seq[t].ROutput())
+
 			step.InputVars[l] = &autofunc.RVariable{
 				Variable:   &autofunc.Variable{Vector: inVec},
 				ROutputVec: inVecR,
@@ -167,7 +170,7 @@ func (s *SeqFunc) BatchSeqsR(rv autofunc.RVector, seqs [][]autofunc.RResult) rnn
 		res.Steps = append(res.Steps, step)
 		for l, outIdx := range step.LaneToOut {
 			outVec := step.Outputs.Outputs()[outIdx]
-			outVecR := step.Outputs.Outputs()[outIdx]
+			outVecR := step.Outputs.ROutputs()[outIdx]
 			outData := outVec[s.Struct.ControlSize():]
 			outDataR := outVecR[s.Struct.ControlSize():]
 			res.PackedOut[l] = append(res.PackedOut[l], outData)
@@ -237,7 +240,6 @@ func (s *seqFuncOutput) OutputSeqs() [][]linalg.Vector {
 
 func (s *seqFuncOutput) Gradient(upstream [][]linalg.Vector, g autofunc.Gradient) {
 	// TODO: this.
-	panic("not yet implemented.")
 }
 
 type seqFuncROutputStep struct {
@@ -271,5 +273,4 @@ func (s *seqFuncROutput) ROutputSeqs() [][]linalg.Vector {
 func (s *seqFuncROutput) RGradient(upstream, upstreamR [][]linalg.Vector,
 	rg autofunc.RGradient, g autofunc.Gradient) {
 	// TODO: this.
-	panic("not yet implemented.")
 }

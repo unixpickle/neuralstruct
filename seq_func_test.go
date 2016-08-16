@@ -27,13 +27,21 @@ func TestSeqFuncGradient(t *testing.T) {
 func TestSeqFuncRGradient(t *testing.T) {
 	f := newSeqFuncTestFunc()
 	inVec := f.RandomInput()
-	inVecR := f.RandomInput()
 	inVar := &autofunc.Variable{Vector: inVec}
+
+	rv := autofunc.RVector{inVar: f.RandomInput()}
+	for _, param := range f.Parameters() {
+		rv[param] = make(linalg.Vector, len(param.Output()))
+		for i := range rv[param] {
+			rv[param][i] = rand.NormFloat64()
+		}
+	}
+
 	test := functest.RFuncTest{
 		F:     f,
 		Vars:  append([]*autofunc.Variable{inVar}, f.Parameters()...),
 		Input: inVar,
-		RV:    autofunc.RVector{inVar: inVecR},
+		RV:    rv,
 	}
 	test.Run(t)
 }
@@ -124,7 +132,7 @@ func (s *seqFuncTestFunc) ApplyR(rv autofunc.RVector, in autofunc.RResult) autof
 	for i, outSeq := range output.OutputSeqs() {
 		for j, outVec := range outSeq {
 			joined = append(joined, outVec...)
-			joinedR = append(joined, output.ROutputSeqs()[i][j]...)
+			joinedR = append(joinedR, output.ROutputSeqs()[i][j]...)
 		}
 	}
 	return &seqFuncTestFuncRRes{
