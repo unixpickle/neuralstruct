@@ -239,7 +239,83 @@ func (s *seqFuncOutput) OutputSeqs() [][]linalg.Vector {
 }
 
 func (s *seqFuncOutput) Gradient(upstream [][]linalg.Vector, g autofunc.Gradient) {
-	// TODO: this.
+	numLanes := len(s.PackedOut)
+	if len(upstream) != numLanes {
+		panic("incorrect upstream dimensions")
+	}
+	for i, x := range upstream {
+		if len(x) != len(s.PackedOut[i]) {
+			panic("incorrect upstream dimensions")
+		}
+	}
+
+	stateVecUpstreams := make([]linalg.Vector, numLanes)
+	stateUpstreams := make([]Grad, numLanes)
+	stateDataUpstreams := make([]linalg.Vector, numLanes)
+
+	for t := len(s.Steps) - 1; t >= 0; t-- {
+		step := s.Steps[t]
+
+		var blockUpstream rnn.UpstreamGradient
+		loopUsedLanes(step.LaneToOut, func(l int) {
+			outState := step.OutStates[len(blockUpstream.Outputs)]
+			dataUpstream := stateDataUpstreams[l]
+			if dataUpstream == nil {
+				dataUpstream = make(linalg.Vector, len(outState.Data()))
+			}
+			stateUpstream := stateUpstreams[l]
+			ctrlUpstream, gradDownstream := outState.Gradient(dataUpstream, stateUpstream)
+
+			stateUpstreams[l] = gradDownstream
+
+			outputUpstream := upstream[l][t]
+			blockOutGrad := make(linalg.Vector, len(ctrlUpstream)+len(outputUpstream))
+			copy(blockOutGrad, ctrlUpstream)
+			copy(blockOutGrad[len(ctrlUpstream):], outputUpstream)
+			blockUpstream.Outputs = append(blockUpstream.Outputs, blockOutGrad)
+
+			stateVar := step.InStateVars[l]
+			stateVecUpstream := stateVecUpstreams[l]
+			if stateVecUpstream == nil {
+				stateVecUpstream = make(linalg.Vector, len(stateVar.Vector))
+			}
+			blockUpstream.States = append(blockUpstream.States, stateVecUpstream)
+			if t > 0 {
+				g[stateVar] = make(linalg.Vector, len(stateVar.Vector))
+			}
+			if t > 0 || !step.Inputs[l].Constant(g) {
+				g[step.InputVars[l]] = make(linalg.Vector, len(step.InputVars[l].Vector))
+			}
+		})
+
+		step.Outputs.Gradient(&blockUpstream, g)
+
+		var stateIdx int
+		loopUsedLanes(step.LaneToOut, func(l int) {
+			if t > 0 {
+				stateVar := step.InStateVars[l]
+				stateVecUpstreams[l] = g[stateVar]
+				delete(g, stateVar)
+			}
+
+			if input := step.Inputs[l]; t > 0 || !input.Constant(g) {
+				upstream := g[step.InputVars[l]]
+				delete(g, step.InputVars[l])
+
+				// Technically we want the length of the previous state's
+				// data, but all states have the same data length.
+				structDataSize := len(step.OutStates[stateIdx].Data())
+
+				stateDataUpstreams[l] = upstream[:structDataSize]
+
+				if !input.Constant(g) {
+					input.PropagateGradient(upstream[structDataSize:], g)
+				}
+			}
+
+			stateIdx++
+		})
+	}
 }
 
 type seqFuncROutputStep struct {
@@ -273,4 +349,16 @@ func (s *seqFuncROutput) ROutputSeqs() [][]linalg.Vector {
 func (s *seqFuncROutput) RGradient(upstream, upstreamR [][]linalg.Vector,
 	rg autofunc.RGradient, g autofunc.Gradient) {
 	// TODO: this.
+}
+
+func loopUsedLanes(laneToOut map[int]int, f func(int)) {
+	var lane int
+	k := len(laneToOut)
+	for k > 0 {
+		if _, ok := laneToOut[lane]; ok {
+			f(lane)
+			k--
+		}
+		lane++
+	}
 }

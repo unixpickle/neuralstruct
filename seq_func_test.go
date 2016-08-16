@@ -154,7 +154,7 @@ func (s *seqFuncTestFuncRes) Output() linalg.Vector {
 }
 
 func (s *seqFuncTestFuncRes) Constant(g autofunc.Gradient) bool {
-	return s.Input.Constant(g)
+	return false
 }
 
 func (s *seqFuncTestFuncRes) PropagateGradient(upstream linalg.Vector, g autofunc.Gradient) {
@@ -188,7 +188,7 @@ func (s *seqFuncTestFuncRRes) ROutput() linalg.Vector {
 }
 
 func (s *seqFuncTestFuncRRes) Constant(rg autofunc.RGradient, g autofunc.Gradient) bool {
-	return s.Input.Constant(rg, g)
+	return false
 }
 
 func (s *seqFuncTestFuncRRes) PropagateRGradient(upstream, upstreamR linalg.Vector,
