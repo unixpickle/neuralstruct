@@ -1,9 +1,23 @@
 package neuralstruct
 
 import (
+	"math"
+
 	"github.com/unixpickle/autofunc"
 	"github.com/unixpickle/num-analysis/linalg"
 )
+
+func statesEqual(d1, d2 linalg.Vector) bool {
+	if len(d1) != len(d2) {
+		return false
+	}
+	for i, x := range d1 {
+		if math.Abs(x-d2[i]) > 1e-5 {
+			return false
+		}
+	}
+	return true
+}
 
 type structFunc struct {
 	Struct Struct

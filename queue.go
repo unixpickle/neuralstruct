@@ -56,7 +56,7 @@ func (q *queueState) Gradient(dataGrad linalg.Vector, upstreamGrad Grad) (linalg
 }
 
 func (q *queueState) NextState(ctrl linalg.Vector) State {
-	probs := ctrl[:3]
+	probs := ctrl[:queueFlagCount]
 	softmax := autofunc.Softmax{}
 	flags := softmax.Apply(&autofunc.Variable{Vector: probs}).Output()
 

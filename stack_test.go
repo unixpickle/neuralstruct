@@ -120,18 +120,6 @@ func testStackRGradient(t *testing.T, steps int) {
 	test.Run(t)
 }
 
-func statesEqual(d1, d2 linalg.Vector) bool {
-	if len(d1) != len(d2) {
-		return false
-	}
-	for i, x := range d1 {
-		if math.Abs(x-d2[i]) > 1e-5 {
-			return false
-		}
-	}
-	return true
-}
-
 func stackTestFunc() (funcOut autofunc.Func, inSize int) {
 	res := &structFunc{Struct: &Stack{VectorSize: 4}}
 	return res, res.Struct.ControlSize()
