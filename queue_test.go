@@ -2,7 +2,12 @@ package neuralstruct
 
 import (
 	"math"
+	"math/rand"
 	"testing"
+
+	"github.com/unixpickle/autofunc"
+	"github.com/unixpickle/autofunc/functest"
+	"github.com/unixpickle/num-analysis/linalg"
 )
 
 func TestQueueData(t *testing.T) {
@@ -35,4 +40,32 @@ func TestQueueData(t *testing.T) {
 			state = state.NextState(controls[i])
 		}
 	}
+}
+
+func TestQueueShallowGradient(t *testing.T) {
+	testQueueGradient(t, 1)
+}
+
+func TestQueueDeepGradient(t *testing.T) {
+	testQueueGradient(t, 4)
+}
+
+func testQueueGradient(t *testing.T, steps int) {
+	f, ctrl := queueTestFunc()
+	inVec := make(linalg.Vector, ctrl*steps)
+	for i := range inVec {
+		inVec[i] = rand.NormFloat64()
+	}
+	inVar := &autofunc.Variable{Vector: inVec}
+	test := functest.FuncTest{
+		F:     f,
+		Vars:  []*autofunc.Variable{inVar},
+		Input: inVar,
+	}
+	test.Run(t)
+}
+
+func queueTestFunc() (funcOut autofunc.Func, inSize int) {
+	res := &structFunc{Struct: &Queue{VectorSize: 4}}
+	return res, res.Struct.ControlSize()
 }

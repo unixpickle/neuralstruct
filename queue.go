@@ -52,7 +52,7 @@ func (q *queueState) Data() linalg.Vector {
 
 func (q *queueState) Gradient(dataGrad linalg.Vector, upstreamGrad Grad) (linalg.Vector, Grad) {
 	// TODO: this.
-	return nil, nil
+	return make(linalg.Vector, len(dataGrad)+queueFlagCount), nil
 }
 
 func (q *queueState) NextState(ctrl linalg.Vector) State {
