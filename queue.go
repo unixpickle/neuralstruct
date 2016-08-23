@@ -34,15 +34,15 @@ func (q *Queue) DataSize() int {
 // StartState returns a state representing an empty queue.
 func (q *Queue) StartState() State {
 	return &queueState{
-		Queues:     [][]linalg.Vector{nil},
-		Probs:      []float64{1},
+		Expected:   nil,
+		SizeProbs:  []float64{1},
 		OutputData: make(linalg.Vector, q.VectorSize),
 	}
 }
 
 type queueState struct {
-	Queues     [][]linalg.Vector
-	Probs      []float64
+	Expected   []linalg.Vector
+	SizeProbs  []float64
 	OutputData linalg.Vector
 }
 
@@ -62,36 +62,37 @@ func (q *queueState) NextState(ctrl linalg.Vector) State {
 
 	var res queueState
 
-	res.Queues = append(res.Queues, q.Queues...)
-	for _, prob := range q.Probs {
-		res.Probs = append(res.Probs, prob*flags[queueNop])
-	}
+	res.Expected = make([]linalg.Vector, len(q.Expected)+1)
+	res.SizeProbs = make([]float64, len(q.SizeProbs)+1)
 
-	for i, queue := range q.Queues {
-		newQueue := make([]linalg.Vector, len(queue)+1)
-		copy(newQueue, queue)
-		newQueue[len(newQueue)-1] = ctrl[queueFlagCount:]
-		res.Queues = append(res.Queues, newQueue)
-		res.Probs = append(res.Probs, q.Probs[i]*flags[queuePush])
-	}
-
-	for i, queue := range q.Queues {
-		if len(queue) == 0 {
-			res.Queues = append(res.Queues, queue)
+	for i, old := range q.SizeProbs {
+		res.SizeProbs[i] += old * flags[queueNop]
+		if i > 0 {
+			res.SizeProbs[i-1] += old * flags[queuePop]
 		} else {
-			res.Queues = append(res.Queues, queue[1:])
+			res.SizeProbs[i] += old * flags[queuePop]
 		}
-		res.Probs = append(res.Probs, q.Probs[i]*flags[queuePop])
+		res.SizeProbs[i+1] += old * flags[queuePush]
 	}
 
-	expectedData := make(linalg.Vector, len(q.Data()))
-	for i, queue := range res.Queues {
-		if len(queue) == 0 {
-			continue
+	for i, vec := range q.Expected {
+		res.Expected[i] = vec.Copy().Scale(flags[queueNop] + flags[queuePush])
+		if i > 0 {
+			res.Expected[i-1].Add(vec.Copy().Scale(flags[queuePop]))
 		}
-		expectedData.Add(queue[0].Copy().Scale(res.Probs[i]))
 	}
-	res.OutputData = expectedData
+
+	pushData := ctrl[queueFlagCount:]
+	for i, prob := range q.SizeProbs {
+		pushVec := pushData.Copy().Scale(flags[queuePush] * prob)
+		if i == len(res.Expected)-1 {
+			res.Expected[i] = pushVec
+		} else {
+			res.Expected[i].Add(pushVec)
+		}
+	}
+
+	res.OutputData = res.Expected[0]
 
 	return &res
 }
