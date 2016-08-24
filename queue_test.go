@@ -65,7 +65,38 @@ func testQueueGradient(t *testing.T, steps int) {
 	test.Run(t)
 }
 
+func TestQueueShallowRGradient(t *testing.T) {
+	testQueueRGradient(t, 1)
+}
+
+func TestQueueDeepRGradient(t *testing.T) {
+	testQueueRGradient(t, 4)
+}
+
+func testQueueRGradient(t *testing.T, steps int) {
+	f, ctrl := queueTestRFunc()
+	inVec := make(linalg.Vector, steps*ctrl)
+	inVecR := make(linalg.Vector, steps*ctrl)
+	for i := range inVec {
+		inVec[i] = rand.NormFloat64()
+		inVecR[i] = rand.NormFloat64()
+	}
+	inVar := &autofunc.Variable{Vector: inVec}
+	test := functest.RFuncTest{
+		F:     f,
+		Vars:  []*autofunc.Variable{inVar},
+		Input: inVar,
+		RV:    autofunc.RVector{inVar: inVecR},
+	}
+	test.Run(t)
+}
+
 func queueTestFunc() (funcOut autofunc.Func, inSize int) {
 	res := &structFunc{Struct: &Queue{VectorSize: 4}}
+	return res, res.Struct.ControlSize()
+}
+
+func queueTestRFunc() (funcOut autofunc.RFunc, inSize int) {
+	res := &structRFunc{Struct: &Queue{VectorSize: 4}}
 	return res, res.Struct.ControlSize()
 }

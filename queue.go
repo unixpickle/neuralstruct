@@ -34,9 +34,19 @@ func (q *Queue) DataSize() int {
 // StartState returns a state representing an empty queue.
 func (q *Queue) StartState() State {
 	return &queueState{
-		Expected:   nil,
 		SizeProbs:  []float64{1},
 		OutputData: make(linalg.Vector, q.VectorSize),
+	}
+}
+
+// StartRState returns a state representing an empty queue.
+func (q *Queue) StartRState() RState {
+	zeroVec := make(linalg.Vector, q.VectorSize)
+	return &queueRState{
+		SizeProbs:   []float64{1},
+		RSizeProbs:  []float64{0},
+		OutputData:  zeroVec,
+		ROutputData: zeroVec,
 	}
 }
 
@@ -173,6 +183,115 @@ func (q *queueState) NextState(ctrl linalg.Vector) State {
 }
 
 type queueUpstream struct {
+	Expected  []linalg.Vector
+	SizeProbs []float64
+}
+
+type queueRState struct {
+	Expected    []linalg.Vector
+	RExpected   []linalg.Vector
+	SizeProbs   []float64
+	RSizeProbs  []float64
+	OutputData  linalg.Vector
+	ROutputData linalg.Vector
+
+	ControlIn  linalg.Vector
+	RControlIn linalg.Vector
+	Last       *queueRState
+}
+
+func (q *queueRState) Data() linalg.Vector {
+	return q.OutputData
+}
+
+func (q *queueRState) RData() linalg.Vector {
+	return q.OutputData
+}
+
+func (q *queueRState) RGradient(dataGrad, dataGradR linalg.Vector,
+	upstreamGrad RGrad) (linalg.Vector, linalg.Vector, RGrad) {
+	if q.Last == nil {
+		panic("cannot propagate through start state")
+	}
+
+	// TODO: this.
+
+	return make(linalg.Vector, len(dataGrad)+queueFlagCount),
+		make(linalg.Vector, len(dataGrad)+queueFlagCount),
+		nil
+}
+
+func (q *queueRState) NextRState(ctrl, ctrlR linalg.Vector) RState {
+	probs := ctrl[:queueFlagCount]
+	softmax := autofunc.Softmax{}
+	probsVar := &autofunc.RVariable{
+		Variable:   &autofunc.Variable{Vector: probs},
+		ROutputVec: ctrlR,
+	}
+	flagsRes := softmax.ApplyR(autofunc.RVector{}, probsVar)
+	flags := flagsRes.Output()
+	flagsR := flagsRes.ROutput()
+
+	var res queueRState
+
+	res.Expected = make([]linalg.Vector, len(q.Expected)+1)
+	res.RExpected = make([]linalg.Vector, len(q.Expected)+1)
+	res.SizeProbs = make([]float64, len(q.SizeProbs)+1)
+	res.RSizeProbs = make([]float64, len(q.SizeProbs)+1)
+
+	for i, old := range q.SizeProbs {
+		oldR := q.RSizeProbs[i]
+		res.SizeProbs[i] += old * flags[queueNop]
+		res.RSizeProbs[i] += oldR*flags[queueNop] + old*flagsR[queueNop]
+		if i > 0 {
+			res.SizeProbs[i-1] += old * flags[queuePop]
+			res.RSizeProbs[i-1] += oldR*flags[queuePop] + old*flagsR[queuePop]
+		} else {
+			res.SizeProbs[i] += old * flags[queuePop]
+			res.RSizeProbs[i] += oldR*flags[queuePop] + old*flagsR[queuePop]
+		}
+		res.SizeProbs[i+1] += old * flags[queuePush]
+		res.RSizeProbs[i+1] += oldR*flags[queuePush] + old*flagsR[queuePush]
+	}
+
+	for i, vec := range q.Expected {
+		vecR := q.RExpected[i]
+		res.Expected[i] = vec.Copy().Scale(flags[queueNop] + flags[queuePush])
+		res.RExpected[i] = vec.Copy().Scale(flagsR[queueNop] + flagsR[queuePush])
+		res.RExpected[i].Add(vecR.Copy().Scale(flags[queueNop] + flags[queuePush]))
+		if i > 0 {
+			res.Expected[i-1].Add(vec.Copy().Scale(flags[queuePop]))
+			res.RExpected[i-1].Add(vec.Copy().Scale(flagsR[queuePop]))
+			res.RExpected[i-1].Add(vecR.Copy().Scale(flags[queuePop]))
+		}
+	}
+
+	pushData := ctrl[queueFlagCount:]
+	pushDataR := ctrlR[queueFlagCount:]
+	for i, prob := range q.SizeProbs {
+		probR := q.RSizeProbs[i]
+		pushVec := pushData.Copy().Scale(flags[queuePush] * prob)
+		pushVecR := pushDataR.Copy().Scale(flags[queuePush] * prob)
+		pushVecR.Add(pushData.Copy().Scale(flagsR[queuePush]*prob + flags[queuePush]*probR))
+		if i == len(res.Expected)-1 {
+			res.Expected[i] = pushVec
+			res.RExpected[i] = pushVecR
+		} else {
+			res.Expected[i].Add(pushVec)
+			res.RExpected[i].Add(pushVecR)
+		}
+	}
+
+	res.OutputData = res.Expected[0]
+	res.ROutputData = res.RExpected[0]
+	res.ControlIn = ctrl
+	res.RControlIn = ctrlR
+	res.Last = q
+
+	return &res
+}
+
+type queueRUpstream struct {
 	Expected  []linalg.Vector
 	SizeProbs []float64
 }
