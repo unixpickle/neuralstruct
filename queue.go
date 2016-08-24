@@ -314,7 +314,7 @@ func (q *queueRState) RGradient(dataGrad, dataGradR linalg.Vector,
 			downstream.RSizeProbs[i] += flagsR[queuePop]*upstream.SizeProbs[i] +
 				flags[queuePop]*upstream.RSizeProbs[i]
 			flagsGrad[queuePop] += old * upstream.SizeProbs[i]
-			flagsGrad[queuePop] += oldR*upstream.SizeProbs[i] + old*upstream.RSizeProbs[i]
+			flagsGradR[queuePop] += oldR*upstream.SizeProbs[i] + old*upstream.RSizeProbs[i]
 		}
 		downstream.SizeProbs[i] += flags[queuePush] * upstream.SizeProbs[i+1]
 		downstream.RSizeProbs[i] += flagsR[queuePush]*upstream.SizeProbs[i+1] +
