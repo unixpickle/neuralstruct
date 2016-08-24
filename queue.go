@@ -213,12 +213,128 @@ func (q *queueRState) RGradient(dataGrad, dataGradR linalg.Vector,
 	if q.Last == nil {
 		panic("cannot propagate through start state")
 	}
+	softmax := autofunc.Softmax{}
+	flagsVar := &autofunc.RVariable{
+		Variable:   &autofunc.Variable{Vector: q.ControlIn[:queueFlagCount]},
+		ROutputVec: q.RControlIn[:queueFlagCount],
+	}
+	flagRes := softmax.ApplyR(autofunc.RVector{}, flagsVar)
+	flags := flagRes.Output()
+	flagsR := flagRes.ROutput()
 
-	// TODO: this.
+	flagsGrad := make(linalg.Vector, queueFlagCount)
+	flagsGradR := make(linalg.Vector, queueFlagCount)
 
-	return make(linalg.Vector, len(dataGrad)+queueFlagCount),
-		make(linalg.Vector, len(dataGrad)+queueFlagCount),
-		nil
+	var upstream *queueRUpstream
+	if upstreamGrad != nil {
+		upstream = upstreamGrad.(*queueRUpstream)
+		upstream.Expected[0].Add(dataGrad)
+		upstream.RExpected[0].Add(dataGradR)
+	} else {
+		upstream = new(queueRUpstream)
+		upstream.SizeProbs = make([]float64, len(q.SizeProbs))
+		upstream.RSizeProbs = make([]float64, len(q.SizeProbs))
+		upstream.Expected = make([]linalg.Vector, len(q.Expected))
+		upstream.RExpected = make([]linalg.Vector, len(q.Expected))
+		upstream.Expected[0] = dataGrad
+		upstream.RExpected[0] = dataGradR
+		zeroVec := make(linalg.Vector, len(dataGrad))
+		for i := 1; i < len(upstream.Expected); i++ {
+			upstream.Expected[i] = zeroVec
+			upstream.RExpected[i] = zeroVec
+		}
+	}
+
+	downstream := &queueRUpstream{
+		Expected:   make([]linalg.Vector, len(q.Last.Expected)),
+		RExpected:  make([]linalg.Vector, len(q.Last.Expected)),
+		SizeProbs:  make([]float64, len(q.Last.SizeProbs)),
+		RSizeProbs: make([]float64, len(q.Last.SizeProbs)),
+	}
+	for i, vec := range q.Last.Expected {
+		vecR := q.Last.RExpected[i]
+		downstream.Expected[i] = upstream.Expected[i].Copy().Scale(flags[queueNop] +
+			flags[queuePush])
+		downstream.RExpected[i] = upstream.RExpected[i].Copy().Scale(flags[queueNop] +
+			flags[queuePush])
+		downstream.RExpected[i].Add(upstream.Expected[i].Copy().Scale(flagsR[queueNop] +
+			flagsR[queuePush]))
+		vecDot := vec.Dot(upstream.Expected[i])
+		vecDotR := vec.Dot(upstream.RExpected[i]) + vecR.Dot(upstream.Expected[i])
+		flagsGrad[queueNop] += vecDot
+		flagsGrad[queuePush] += vecDot
+		flagsGradR[queueNop] += vecDotR
+		flagsGradR[queuePush] += vecDotR
+		if i > 0 {
+			downstream.Expected[i].Add(upstream.Expected[i-1].Copy().Scale(flags[queuePop]))
+			downstream.RExpected[i].Add(upstream.RExpected[i-1].Copy().Scale(flags[queuePop]))
+			downstream.RExpected[i].Add(upstream.Expected[i-1].Copy().Scale(flagsR[queuePop]))
+			flagsGrad[queuePop] += vec.Dot(upstream.Expected[i-1])
+			flagsGradR[queuePop] += vecR.Dot(upstream.Expected[i-1]) +
+				vec.Dot(upstream.RExpected[i-1])
+		}
+	}
+
+	pushDataGrad := make(linalg.Vector, len(q.Data()))
+	pushDataGradR := make(linalg.Vector, len(q.RData()))
+
+	for i, prob := range q.Last.SizeProbs {
+		probR := q.Last.RSizeProbs[i]
+		pushData := q.ControlIn[queueFlagCount:]
+		pushDataR := q.RControlIn[queueFlagCount:]
+		pushDataGrad.Add(upstream.Expected[i].Copy().Scale(flags[queuePush] * prob))
+		pushDataGradR.Add(upstream.RExpected[i].Copy().Scale(flags[queuePush] * prob))
+		pushDataGradR.Add(upstream.Expected[i].Copy().Scale(flagsR[queuePush]*prob +
+			flags[queuePush]*probR))
+		upstreamDot := upstream.Expected[i].Dot(pushData)
+		upstreamDotR := upstream.RExpected[i].Dot(pushData) + upstream.Expected[i].Dot(pushDataR)
+		flagsGrad[queuePush] += prob * upstreamDot
+		flagsGradR[queuePush] += probR*upstreamDot + prob*upstreamDotR
+		downstream.SizeProbs[i] += flags[queuePush] * upstreamDot
+		downstream.RSizeProbs[i] += flagsR[queuePush]*upstreamDot +
+			flags[queuePush]*upstreamDotR
+	}
+
+	for i, old := range q.Last.SizeProbs {
+		oldR := q.Last.RSizeProbs[i]
+		downstream.SizeProbs[i] += flags[queueNop] * upstream.SizeProbs[i]
+		downstream.RSizeProbs[i] += flagsR[queueNop]*upstream.SizeProbs[i] +
+			flags[queueNop]*upstream.RSizeProbs[i]
+		flagsGrad[queueNop] += old * upstream.SizeProbs[i]
+		flagsGradR[queueNop] += oldR*upstream.SizeProbs[i] + old*upstream.RSizeProbs[i]
+		if i > 0 {
+			downstream.SizeProbs[i] += flags[queuePop] * upstream.SizeProbs[i-1]
+			downstream.RSizeProbs[i] += flagsR[queuePop]*upstream.SizeProbs[i-1] +
+				flags[queuePop]*upstream.RSizeProbs[i-1]
+			flagsGrad[queuePop] += old * upstream.SizeProbs[i-1]
+			flagsGradR[queuePop] += oldR*upstream.SizeProbs[i-1] +
+				old*upstream.RSizeProbs[i-1]
+		} else {
+			downstream.SizeProbs[i] += flags[queuePop] * upstream.SizeProbs[i]
+			downstream.RSizeProbs[i] += flagsR[queuePop]*upstream.SizeProbs[i] +
+				flags[queuePop]*upstream.RSizeProbs[i]
+			flagsGrad[queuePop] += old * upstream.SizeProbs[i]
+			flagsGrad[queuePop] += oldR*upstream.SizeProbs[i] + old*upstream.RSizeProbs[i]
+		}
+		downstream.SizeProbs[i] += flags[queuePush] * upstream.SizeProbs[i+1]
+		downstream.RSizeProbs[i] += flagsR[queuePush]*upstream.SizeProbs[i+1] +
+			flags[queuePush]*upstream.RSizeProbs[i+1]
+		flagsGrad[queuePush] += old * upstream.SizeProbs[i+1]
+		flagsGradR[queuePush] += oldR*upstream.SizeProbs[i+1] + old*upstream.RSizeProbs[i+1]
+	}
+
+	fg := autofunc.NewGradient([]*autofunc.Variable{flagsVar.Variable})
+	fgR := autofunc.NewRGradient([]*autofunc.Variable{flagsVar.Variable})
+	flagRes.PropagateRGradient(flagsGrad, flagsGradR, fgR, fg)
+
+	ctrlGrad := make(linalg.Vector, queueFlagCount+len(pushDataGrad))
+	copy(ctrlGrad, fg[flagsVar.Variable])
+	copy(ctrlGrad[queueFlagCount:], pushDataGrad)
+	ctrlGradR := make(linalg.Vector, queueFlagCount+len(pushDataGrad))
+	copy(ctrlGradR, fgR[flagsVar.Variable])
+	copy(ctrlGradR[queueFlagCount:], pushDataGradR)
+
+	return ctrlGrad, ctrlGradR, downstream
 }
 
 func (q *queueRState) NextRState(ctrl, ctrlR linalg.Vector) RState {
@@ -292,6 +408,8 @@ func (q *queueRState) NextRState(ctrl, ctrlR linalg.Vector) RState {
 }
 
 type queueRUpstream struct {
-	Expected  []linalg.Vector
-	SizeProbs []float64
+	Expected   []linalg.Vector
+	RExpected  []linalg.Vector
+	SizeProbs  []float64
+	RSizeProbs []float64
 }
