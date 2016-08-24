@@ -205,7 +205,7 @@ func (q *queueRState) Data() linalg.Vector {
 }
 
 func (q *queueRState) RData() linalg.Vector {
-	return q.OutputData
+	return q.ROutputData
 }
 
 func (q *queueRState) RGradient(dataGrad, dataGradR linalg.Vector,
@@ -226,7 +226,7 @@ func (q *queueRState) NextRState(ctrl, ctrlR linalg.Vector) RState {
 	softmax := autofunc.Softmax{}
 	probsVar := &autofunc.RVariable{
 		Variable:   &autofunc.Variable{Vector: probs},
-		ROutputVec: ctrlR,
+		ROutputVec: ctrlR[:queueFlagCount],
 	}
 	flagsRes := softmax.ApplyR(autofunc.RVector{}, probsVar)
 	flags := flagsRes.Output()
