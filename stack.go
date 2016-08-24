@@ -10,11 +10,12 @@ import (
 
 const stackFlagCount = 4
 
+// These are the control flags (in order) of a Stack.
 const (
-	stackNop int = iota
-	stackPush
-	stackPop
-	stackReplace
+	StackNop int = iota
+	StackPush
+	StackPop
+	StackReplace
 )
 
 func init() {
@@ -114,34 +115,34 @@ func (s *stackState) Gradient(dataGrad linalg.Vector, upstreamGrad Grad) (linalg
 	downstream := make([]linalg.Vector, len(s.Last.Expected))
 
 	for i, v := range s.Last.Expected {
-		scaler := flags[stackNop]
+		scaler := flags[StackNop]
 		if i != 0 {
-			scaler += flags[stackReplace]
+			scaler += flags[StackReplace]
 		}
 		downstream[i] = upstream[i].Copy().Scale(scaler)
 
 		gradDot := v.Dot(upstream[i])
-		flagsDownstream[stackNop] += gradDot
+		flagsDownstream[StackNop] += gradDot
 		if i != 0 {
-			flagsDownstream[stackReplace] += gradDot
+			flagsDownstream[StackReplace] += gradDot
 		}
 	}
 
 	if len(s.Last.Expected) > 0 {
 		for i, v := range s.Last.Expected[1:] {
-			downstream[i+1].Add(upstream[i].Copy().Scale(flags[stackPop]))
-			flagsDownstream[stackPop] += upstream[i].Dot(v)
+			downstream[i+1].Add(upstream[i].Copy().Scale(flags[StackPop]))
+			flagsDownstream[StackPop] += upstream[i].Dot(v)
 		}
 	}
 
-	controlDataDownstream := upstream[0].Copy().Scale(flags[stackPush] + flags[stackReplace])
+	controlDataDownstream := upstream[0].Copy().Scale(flags[StackPush] + flags[StackReplace])
 	pushReplaceDot := upstream[0].Dot(controlData)
-	flagsDownstream[stackPush] += pushReplaceDot
-	flagsDownstream[stackReplace] += pushReplaceDot
+	flagsDownstream[StackPush] += pushReplaceDot
+	flagsDownstream[StackReplace] += pushReplaceDot
 
 	for i, v := range s.Last.Expected {
-		downstream[i].Add(upstream[i+1].Copy().Scale(flags[stackPush]))
-		flagsDownstream[stackPush] += upstream[i+1].Dot(v)
+		downstream[i].Add(upstream[i+1].Copy().Scale(flags[StackPush]))
+		flagsDownstream[StackPush] += upstream[i+1].Dot(v)
 	}
 
 	controlDownstream := make(linalg.Vector, len(s.Control))
@@ -166,9 +167,9 @@ func (s *stackState) NextState(control linalg.Vector) State {
 	}
 
 	for i, v := range s.Expected {
-		scaler := flags[stackNop]
+		scaler := flags[StackNop]
 		if i != 0 {
-			scaler += flags[stackReplace]
+			scaler += flags[StackReplace]
 		}
 		newState.Expected[i] = v.Copy().Scale(scaler)
 	}
@@ -176,13 +177,13 @@ func (s *stackState) NextState(control linalg.Vector) State {
 
 	if len(s.Expected) > 0 {
 		for i, v := range s.Expected[1:] {
-			newState.Expected[i].Add(v.Copy().Scale(flags[stackPop]))
+			newState.Expected[i].Add(v.Copy().Scale(flags[StackPop]))
 		}
 	}
 
-	newState.Expected[0].Add(controlData.Copy().Scale(flags[stackPush] + flags[stackReplace]))
+	newState.Expected[0].Add(controlData.Copy().Scale(flags[StackPush] + flags[StackReplace]))
 	for i, v := range s.Expected {
-		newState.Expected[i+1].Add(v.Copy().Scale(flags[stackPush]))
+		newState.Expected[i+1].Add(v.Copy().Scale(flags[StackPush]))
 	}
 
 	return newState
@@ -256,11 +257,11 @@ func (s *stackRState) RGradient(dataGrad, dataGradR linalg.Vector,
 	for i, v := range s.Last.Expected {
 		vR := s.Last.ExpectedR[i]
 
-		scaler := flags[stackNop]
-		scalerR := flagsR[stackNop]
+		scaler := flags[StackNop]
+		scalerR := flagsR[StackNop]
 		if i != 0 {
-			scaler += flags[stackReplace]
-			scalerR += flagsR[stackReplace]
+			scaler += flags[StackReplace]
+			scalerR += flagsR[StackReplace]
 		}
 		downstream[i] = upstream[i].Copy().Scale(scaler)
 		downstreamR[i] = upstream[i].Copy().Scale(scalerR)
@@ -268,42 +269,42 @@ func (s *stackRState) RGradient(dataGrad, dataGradR linalg.Vector,
 
 		gradDot := v.Dot(upstream[i])
 		gradDotR := vR.Dot(upstream[i]) + v.Dot(upstreamR[i])
-		flagsDownstream[stackNop] += gradDot
-		flagsDownstreamR[stackNop] += gradDotR
+		flagsDownstream[StackNop] += gradDot
+		flagsDownstreamR[StackNop] += gradDotR
 		if i != 0 {
-			flagsDownstream[stackReplace] += gradDot
-			flagsDownstreamR[stackReplace] += gradDotR
+			flagsDownstream[StackReplace] += gradDot
+			flagsDownstreamR[StackReplace] += gradDotR
 		}
 	}
 
 	if len(s.Last.Expected) > 0 {
 		for i, v := range s.Last.Expected[1:] {
 			vR := s.Last.ExpectedR[i+1]
-			downstream[i+1].Add(upstream[i].Copy().Scale(flags[stackPop]))
-			downstreamR[i+1].Add(upstreamR[i].Copy().Scale(flags[stackPop]))
-			downstreamR[i+1].Add(upstream[i].Copy().Scale(flagsR[stackPop]))
-			flagsDownstream[stackPop] += upstream[i].Dot(v)
-			flagsDownstreamR[stackPop] += upstreamR[i].Dot(v) + upstream[i].Dot(vR)
+			downstream[i+1].Add(upstream[i].Copy().Scale(flags[StackPop]))
+			downstreamR[i+1].Add(upstreamR[i].Copy().Scale(flags[StackPop]))
+			downstreamR[i+1].Add(upstream[i].Copy().Scale(flagsR[StackPop]))
+			flagsDownstream[StackPop] += upstream[i].Dot(v)
+			flagsDownstreamR[StackPop] += upstreamR[i].Dot(v) + upstream[i].Dot(vR)
 		}
 	}
 
-	controlDataDownstream := upstream[0].Copy().Scale(flags[stackPush] + flags[stackReplace])
-	controlDataDownstreamR := upstream[0].Copy().Scale(flagsR[stackPush] + flagsR[stackReplace])
-	controlDataDownstreamR.Add(upstreamR[0].Copy().Scale(flags[stackPush] + flags[stackReplace]))
+	controlDataDownstream := upstream[0].Copy().Scale(flags[StackPush] + flags[StackReplace])
+	controlDataDownstreamR := upstream[0].Copy().Scale(flagsR[StackPush] + flagsR[StackReplace])
+	controlDataDownstreamR.Add(upstreamR[0].Copy().Scale(flags[StackPush] + flags[StackReplace]))
 	pushReplaceDot := upstream[0].Dot(controlData)
 	pushReplaceDotR := upstreamR[0].Dot(controlData) + upstream[0].Dot(controlDataR)
-	flagsDownstream[stackPush] += pushReplaceDot
-	flagsDownstream[stackReplace] += pushReplaceDot
-	flagsDownstreamR[stackPush] += pushReplaceDotR
-	flagsDownstreamR[stackReplace] += pushReplaceDotR
+	flagsDownstream[StackPush] += pushReplaceDot
+	flagsDownstream[StackReplace] += pushReplaceDot
+	flagsDownstreamR[StackPush] += pushReplaceDotR
+	flagsDownstreamR[StackReplace] += pushReplaceDotR
 
 	for i, v := range s.Last.Expected {
 		vR := s.Last.ExpectedR[i]
-		downstream[i].Add(upstream[i+1].Copy().Scale(flags[stackPush]))
-		downstreamR[i].Add(upstreamR[i+1].Copy().Scale(flags[stackPush]))
-		downstreamR[i].Add(upstream[i+1].Copy().Scale(flagsR[stackPush]))
-		flagsDownstream[stackPush] += upstream[i+1].Dot(v)
-		flagsDownstreamR[stackPush] += upstreamR[i+1].Dot(v) + upstream[i+1].Dot(vR)
+		downstream[i].Add(upstream[i+1].Copy().Scale(flags[StackPush]))
+		downstreamR[i].Add(upstreamR[i+1].Copy().Scale(flags[StackPush]))
+		downstreamR[i].Add(upstream[i+1].Copy().Scale(flagsR[StackPush]))
+		flagsDownstream[StackPush] += upstream[i+1].Dot(v)
+		flagsDownstreamR[StackPush] += upstreamR[i+1].Dot(v) + upstream[i+1].Dot(vR)
 	}
 
 	controlDownstream := make(linalg.Vector, len(s.Control))
@@ -343,11 +344,11 @@ func (s *stackRState) NextRState(control, controlR linalg.Vector) RState {
 	for i, v := range s.Expected {
 		vR := s.ExpectedR[i]
 
-		scaler := flags[stackNop]
-		scalerR := flagsR[stackNop]
+		scaler := flags[StackNop]
+		scalerR := flagsR[StackNop]
 		if i != 0 {
-			scaler += flags[stackReplace]
-			scalerR += flagsR[stackReplace]
+			scaler += flags[StackReplace]
+			scalerR += flagsR[StackReplace]
 		}
 
 		newState.Expected[i] = v.Copy().Scale(scaler)
@@ -359,20 +360,20 @@ func (s *stackRState) NextRState(control, controlR linalg.Vector) RState {
 	if len(s.Expected) > 0 {
 		for i, v := range s.Expected[1:] {
 			vR := s.ExpectedR[i+1]
-			newState.Expected[i].Add(v.Copy().Scale(flags[stackPop]))
-			newState.ExpectedR[i].Add(v.Copy().Scale(flagsR[stackPop]))
-			newState.ExpectedR[i].Add(vR.Copy().Scale(flags[stackPop]))
+			newState.Expected[i].Add(v.Copy().Scale(flags[StackPop]))
+			newState.ExpectedR[i].Add(v.Copy().Scale(flagsR[StackPop]))
+			newState.ExpectedR[i].Add(vR.Copy().Scale(flags[StackPop]))
 		}
 	}
 
-	newState.Expected[0].Add(controlData.Copy().Scale(flags[stackPush] + flags[stackReplace]))
-	newState.ExpectedR[0].Add(controlDataR.Copy().Scale(flags[stackPush] + flags[stackReplace]))
-	newState.ExpectedR[0].Add(controlData.Copy().Scale(flagsR[stackPush] + flagsR[stackReplace]))
+	newState.Expected[0].Add(controlData.Copy().Scale(flags[StackPush] + flags[StackReplace]))
+	newState.ExpectedR[0].Add(controlDataR.Copy().Scale(flags[StackPush] + flags[StackReplace]))
+	newState.ExpectedR[0].Add(controlData.Copy().Scale(flagsR[StackPush] + flagsR[StackReplace]))
 	for i, v := range s.Expected {
 		vR := s.ExpectedR[i]
-		newState.Expected[i+1].Add(v.Copy().Scale(flags[stackPush]))
-		newState.ExpectedR[i+1].Add(vR.Copy().Scale(flags[stackPush]))
-		newState.ExpectedR[i+1].Add(v.Copy().Scale(flagsR[stackPush]))
+		newState.Expected[i+1].Add(v.Copy().Scale(flags[StackPush]))
+		newState.ExpectedR[i+1].Add(vR.Copy().Scale(flags[StackPush]))
+		newState.ExpectedR[i+1].Add(v.Copy().Scale(flagsR[StackPush]))
 	}
 
 	return newState

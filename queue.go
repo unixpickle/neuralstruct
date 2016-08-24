@@ -10,10 +10,11 @@ import (
 
 const queueFlagCount = 3
 
+// These are the control flags (in order) of a Queue.
 const (
-	queueNop int = iota
-	queuePush
-	queuePop
+	QueueNop int = iota
+	QueuePush
+	QueuePop
 )
 
 func init() {
@@ -122,13 +123,13 @@ func (q *queueState) Gradient(dataGrad linalg.Vector, upstreamGrad Grad) (linalg
 		SizeProbs: make([]float64, len(q.Last.SizeProbs)),
 	}
 	for i, vec := range q.Last.Expected {
-		downstream.Expected[i] = upstream.Expected[i].Copy().Scale(flags[queueNop] +
-			flags[queuePush])
-		flagsGrad[queueNop] += vec.Dot(upstream.Expected[i])
-		flagsGrad[queuePush] += vec.Dot(upstream.Expected[i])
+		downstream.Expected[i] = upstream.Expected[i].Copy().Scale(flags[QueueNop] +
+			flags[QueuePush])
+		flagsGrad[QueueNop] += vec.Dot(upstream.Expected[i])
+		flagsGrad[QueuePush] += vec.Dot(upstream.Expected[i])
 		if i > 0 {
-			downstream.Expected[i].Add(upstream.Expected[i-1].Copy().Scale(flags[queuePop]))
-			flagsGrad[queuePop] += vec.Dot(upstream.Expected[i-1])
+			downstream.Expected[i].Add(upstream.Expected[i-1].Copy().Scale(flags[QueuePop]))
+			flagsGrad[QueuePop] += vec.Dot(upstream.Expected[i-1])
 		}
 	}
 
@@ -136,24 +137,24 @@ func (q *queueState) Gradient(dataGrad linalg.Vector, upstreamGrad Grad) (linalg
 
 	for i, prob := range q.Last.SizeProbs {
 		pushData := q.ControlIn[queueFlagCount:]
-		pushDataGrad.Add(upstream.Expected[i].Copy().Scale(flags[queuePush] * prob))
+		pushDataGrad.Add(upstream.Expected[i].Copy().Scale(flags[QueuePush] * prob))
 		upstreamDot := upstream.Expected[i].Dot(pushData)
-		flagsGrad[queuePush] += prob * upstreamDot
-		downstream.SizeProbs[i] += flags[queuePush] * upstreamDot
+		flagsGrad[QueuePush] += prob * upstreamDot
+		downstream.SizeProbs[i] += flags[QueuePush] * upstreamDot
 	}
 
 	for i, old := range q.Last.SizeProbs {
-		downstream.SizeProbs[i] += flags[queueNop] * upstream.SizeProbs[i]
-		flagsGrad[queueNop] += old * upstream.SizeProbs[i]
+		downstream.SizeProbs[i] += flags[QueueNop] * upstream.SizeProbs[i]
+		flagsGrad[QueueNop] += old * upstream.SizeProbs[i]
 		if i > 0 {
-			downstream.SizeProbs[i] += flags[queuePop] * upstream.SizeProbs[i-1]
-			flagsGrad[queuePop] += old * upstream.SizeProbs[i-1]
+			downstream.SizeProbs[i] += flags[QueuePop] * upstream.SizeProbs[i-1]
+			flagsGrad[QueuePop] += old * upstream.SizeProbs[i-1]
 		} else {
-			downstream.SizeProbs[i] += flags[queuePop] * upstream.SizeProbs[i]
-			flagsGrad[queuePop] += old * upstream.SizeProbs[i]
+			downstream.SizeProbs[i] += flags[QueuePop] * upstream.SizeProbs[i]
+			flagsGrad[QueuePop] += old * upstream.SizeProbs[i]
 		}
-		downstream.SizeProbs[i] += flags[queuePush] * upstream.SizeProbs[i+1]
-		flagsGrad[queuePush] += old * upstream.SizeProbs[i+1]
+		downstream.SizeProbs[i] += flags[QueuePush] * upstream.SizeProbs[i+1]
+		flagsGrad[QueuePush] += old * upstream.SizeProbs[i+1]
 	}
 
 	fg := autofunc.NewGradient([]*autofunc.Variable{flagsVar})
@@ -177,25 +178,25 @@ func (q *queueState) NextState(ctrl linalg.Vector) State {
 	res.SizeProbs = make([]float64, len(q.SizeProbs)+1)
 
 	for i, old := range q.SizeProbs {
-		res.SizeProbs[i] += old * flags[queueNop]
+		res.SizeProbs[i] += old * flags[QueueNop]
 		if i > 0 {
-			res.SizeProbs[i-1] += old * flags[queuePop]
+			res.SizeProbs[i-1] += old * flags[QueuePop]
 		} else {
-			res.SizeProbs[i] += old * flags[queuePop]
+			res.SizeProbs[i] += old * flags[QueuePop]
 		}
-		res.SizeProbs[i+1] += old * flags[queuePush]
+		res.SizeProbs[i+1] += old * flags[QueuePush]
 	}
 
 	for i, vec := range q.Expected {
-		res.Expected[i] = vec.Copy().Scale(flags[queueNop] + flags[queuePush])
+		res.Expected[i] = vec.Copy().Scale(flags[QueueNop] + flags[QueuePush])
 		if i > 0 {
-			res.Expected[i-1].Add(vec.Copy().Scale(flags[queuePop]))
+			res.Expected[i-1].Add(vec.Copy().Scale(flags[QueuePop]))
 		}
 	}
 
 	pushData := ctrl[queueFlagCount:]
 	for i, prob := range q.SizeProbs {
-		pushVec := pushData.Copy().Scale(flags[queuePush] * prob)
+		pushVec := pushData.Copy().Scale(flags[QueuePush] * prob)
 		if i == len(res.Expected)-1 {
 			res.Expected[i] = pushVec
 		} else {
@@ -281,24 +282,24 @@ func (q *queueRState) RGradient(dataGrad, dataGradR linalg.Vector,
 	}
 	for i, vec := range q.Last.Expected {
 		vecR := q.Last.RExpected[i]
-		downstream.Expected[i] = upstream.Expected[i].Copy().Scale(flags[queueNop] +
-			flags[queuePush])
-		downstream.RExpected[i] = upstream.RExpected[i].Copy().Scale(flags[queueNop] +
-			flags[queuePush])
-		downstream.RExpected[i].Add(upstream.Expected[i].Copy().Scale(flagsR[queueNop] +
-			flagsR[queuePush]))
+		downstream.Expected[i] = upstream.Expected[i].Copy().Scale(flags[QueueNop] +
+			flags[QueuePush])
+		downstream.RExpected[i] = upstream.RExpected[i].Copy().Scale(flags[QueueNop] +
+			flags[QueuePush])
+		downstream.RExpected[i].Add(upstream.Expected[i].Copy().Scale(flagsR[QueueNop] +
+			flagsR[QueuePush]))
 		vecDot := vec.Dot(upstream.Expected[i])
 		vecDotR := vec.Dot(upstream.RExpected[i]) + vecR.Dot(upstream.Expected[i])
-		flagsGrad[queueNop] += vecDot
-		flagsGrad[queuePush] += vecDot
-		flagsGradR[queueNop] += vecDotR
-		flagsGradR[queuePush] += vecDotR
+		flagsGrad[QueueNop] += vecDot
+		flagsGrad[QueuePush] += vecDot
+		flagsGradR[QueueNop] += vecDotR
+		flagsGradR[QueuePush] += vecDotR
 		if i > 0 {
-			downstream.Expected[i].Add(upstream.Expected[i-1].Copy().Scale(flags[queuePop]))
-			downstream.RExpected[i].Add(upstream.RExpected[i-1].Copy().Scale(flags[queuePop]))
-			downstream.RExpected[i].Add(upstream.Expected[i-1].Copy().Scale(flagsR[queuePop]))
-			flagsGrad[queuePop] += vec.Dot(upstream.Expected[i-1])
-			flagsGradR[queuePop] += vecR.Dot(upstream.Expected[i-1]) +
+			downstream.Expected[i].Add(upstream.Expected[i-1].Copy().Scale(flags[QueuePop]))
+			downstream.RExpected[i].Add(upstream.RExpected[i-1].Copy().Scale(flags[QueuePop]))
+			downstream.RExpected[i].Add(upstream.Expected[i-1].Copy().Scale(flagsR[QueuePop]))
+			flagsGrad[QueuePop] += vec.Dot(upstream.Expected[i-1])
+			flagsGradR[QueuePop] += vecR.Dot(upstream.Expected[i-1]) +
 				vec.Dot(upstream.RExpected[i-1])
 		}
 	}
@@ -310,45 +311,45 @@ func (q *queueRState) RGradient(dataGrad, dataGradR linalg.Vector,
 		probR := q.Last.RSizeProbs[i]
 		pushData := q.ControlIn[queueFlagCount:]
 		pushDataR := q.RControlIn[queueFlagCount:]
-		pushDataGrad.Add(upstream.Expected[i].Copy().Scale(flags[queuePush] * prob))
-		pushDataGradR.Add(upstream.RExpected[i].Copy().Scale(flags[queuePush] * prob))
-		pushDataGradR.Add(upstream.Expected[i].Copy().Scale(flagsR[queuePush]*prob +
-			flags[queuePush]*probR))
+		pushDataGrad.Add(upstream.Expected[i].Copy().Scale(flags[QueuePush] * prob))
+		pushDataGradR.Add(upstream.RExpected[i].Copy().Scale(flags[QueuePush] * prob))
+		pushDataGradR.Add(upstream.Expected[i].Copy().Scale(flagsR[QueuePush]*prob +
+			flags[QueuePush]*probR))
 		upstreamDot := upstream.Expected[i].Dot(pushData)
 		upstreamDotR := upstream.RExpected[i].Dot(pushData) + upstream.Expected[i].Dot(pushDataR)
-		flagsGrad[queuePush] += prob * upstreamDot
-		flagsGradR[queuePush] += probR*upstreamDot + prob*upstreamDotR
-		downstream.SizeProbs[i] += flags[queuePush] * upstreamDot
-		downstream.RSizeProbs[i] += flagsR[queuePush]*upstreamDot +
-			flags[queuePush]*upstreamDotR
+		flagsGrad[QueuePush] += prob * upstreamDot
+		flagsGradR[QueuePush] += probR*upstreamDot + prob*upstreamDotR
+		downstream.SizeProbs[i] += flags[QueuePush] * upstreamDot
+		downstream.RSizeProbs[i] += flagsR[QueuePush]*upstreamDot +
+			flags[QueuePush]*upstreamDotR
 	}
 
 	for i, old := range q.Last.SizeProbs {
 		oldR := q.Last.RSizeProbs[i]
-		downstream.SizeProbs[i] += flags[queueNop] * upstream.SizeProbs[i]
-		downstream.RSizeProbs[i] += flagsR[queueNop]*upstream.SizeProbs[i] +
-			flags[queueNop]*upstream.RSizeProbs[i]
-		flagsGrad[queueNop] += old * upstream.SizeProbs[i]
-		flagsGradR[queueNop] += oldR*upstream.SizeProbs[i] + old*upstream.RSizeProbs[i]
+		downstream.SizeProbs[i] += flags[QueueNop] * upstream.SizeProbs[i]
+		downstream.RSizeProbs[i] += flagsR[QueueNop]*upstream.SizeProbs[i] +
+			flags[QueueNop]*upstream.RSizeProbs[i]
+		flagsGrad[QueueNop] += old * upstream.SizeProbs[i]
+		flagsGradR[QueueNop] += oldR*upstream.SizeProbs[i] + old*upstream.RSizeProbs[i]
 		if i > 0 {
-			downstream.SizeProbs[i] += flags[queuePop] * upstream.SizeProbs[i-1]
-			downstream.RSizeProbs[i] += flagsR[queuePop]*upstream.SizeProbs[i-1] +
-				flags[queuePop]*upstream.RSizeProbs[i-1]
-			flagsGrad[queuePop] += old * upstream.SizeProbs[i-1]
-			flagsGradR[queuePop] += oldR*upstream.SizeProbs[i-1] +
+			downstream.SizeProbs[i] += flags[QueuePop] * upstream.SizeProbs[i-1]
+			downstream.RSizeProbs[i] += flagsR[QueuePop]*upstream.SizeProbs[i-1] +
+				flags[QueuePop]*upstream.RSizeProbs[i-1]
+			flagsGrad[QueuePop] += old * upstream.SizeProbs[i-1]
+			flagsGradR[QueuePop] += oldR*upstream.SizeProbs[i-1] +
 				old*upstream.RSizeProbs[i-1]
 		} else {
-			downstream.SizeProbs[i] += flags[queuePop] * upstream.SizeProbs[i]
-			downstream.RSizeProbs[i] += flagsR[queuePop]*upstream.SizeProbs[i] +
-				flags[queuePop]*upstream.RSizeProbs[i]
-			flagsGrad[queuePop] += old * upstream.SizeProbs[i]
-			flagsGradR[queuePop] += oldR*upstream.SizeProbs[i] + old*upstream.RSizeProbs[i]
+			downstream.SizeProbs[i] += flags[QueuePop] * upstream.SizeProbs[i]
+			downstream.RSizeProbs[i] += flagsR[QueuePop]*upstream.SizeProbs[i] +
+				flags[QueuePop]*upstream.RSizeProbs[i]
+			flagsGrad[QueuePop] += old * upstream.SizeProbs[i]
+			flagsGradR[QueuePop] += oldR*upstream.SizeProbs[i] + old*upstream.RSizeProbs[i]
 		}
-		downstream.SizeProbs[i] += flags[queuePush] * upstream.SizeProbs[i+1]
-		downstream.RSizeProbs[i] += flagsR[queuePush]*upstream.SizeProbs[i+1] +
-			flags[queuePush]*upstream.RSizeProbs[i+1]
-		flagsGrad[queuePush] += old * upstream.SizeProbs[i+1]
-		flagsGradR[queuePush] += oldR*upstream.SizeProbs[i+1] + old*upstream.RSizeProbs[i+1]
+		downstream.SizeProbs[i] += flags[QueuePush] * upstream.SizeProbs[i+1]
+		downstream.RSizeProbs[i] += flagsR[QueuePush]*upstream.SizeProbs[i+1] +
+			flags[QueuePush]*upstream.RSizeProbs[i+1]
+		flagsGrad[QueuePush] += old * upstream.SizeProbs[i+1]
+		flagsGradR[QueuePush] += oldR*upstream.SizeProbs[i+1] + old*upstream.RSizeProbs[i+1]
 	}
 
 	fg := autofunc.NewGradient([]*autofunc.Variable{flagsVar.Variable})
@@ -385,28 +386,28 @@ func (q *queueRState) NextRState(ctrl, ctrlR linalg.Vector) RState {
 
 	for i, old := range q.SizeProbs {
 		oldR := q.RSizeProbs[i]
-		res.SizeProbs[i] += old * flags[queueNop]
-		res.RSizeProbs[i] += oldR*flags[queueNop] + old*flagsR[queueNop]
+		res.SizeProbs[i] += old * flags[QueueNop]
+		res.RSizeProbs[i] += oldR*flags[QueueNop] + old*flagsR[QueueNop]
 		if i > 0 {
-			res.SizeProbs[i-1] += old * flags[queuePop]
-			res.RSizeProbs[i-1] += oldR*flags[queuePop] + old*flagsR[queuePop]
+			res.SizeProbs[i-1] += old * flags[QueuePop]
+			res.RSizeProbs[i-1] += oldR*flags[QueuePop] + old*flagsR[QueuePop]
 		} else {
-			res.SizeProbs[i] += old * flags[queuePop]
-			res.RSizeProbs[i] += oldR*flags[queuePop] + old*flagsR[queuePop]
+			res.SizeProbs[i] += old * flags[QueuePop]
+			res.RSizeProbs[i] += oldR*flags[QueuePop] + old*flagsR[QueuePop]
 		}
-		res.SizeProbs[i+1] += old * flags[queuePush]
-		res.RSizeProbs[i+1] += oldR*flags[queuePush] + old*flagsR[queuePush]
+		res.SizeProbs[i+1] += old * flags[QueuePush]
+		res.RSizeProbs[i+1] += oldR*flags[QueuePush] + old*flagsR[QueuePush]
 	}
 
 	for i, vec := range q.Expected {
 		vecR := q.RExpected[i]
-		res.Expected[i] = vec.Copy().Scale(flags[queueNop] + flags[queuePush])
-		res.RExpected[i] = vec.Copy().Scale(flagsR[queueNop] + flagsR[queuePush])
-		res.RExpected[i].Add(vecR.Copy().Scale(flags[queueNop] + flags[queuePush]))
+		res.Expected[i] = vec.Copy().Scale(flags[QueueNop] + flags[QueuePush])
+		res.RExpected[i] = vec.Copy().Scale(flagsR[QueueNop] + flagsR[QueuePush])
+		res.RExpected[i].Add(vecR.Copy().Scale(flags[QueueNop] + flags[QueuePush]))
 		if i > 0 {
-			res.Expected[i-1].Add(vec.Copy().Scale(flags[queuePop]))
-			res.RExpected[i-1].Add(vec.Copy().Scale(flagsR[queuePop]))
-			res.RExpected[i-1].Add(vecR.Copy().Scale(flags[queuePop]))
+			res.Expected[i-1].Add(vec.Copy().Scale(flags[QueuePop]))
+			res.RExpected[i-1].Add(vec.Copy().Scale(flagsR[QueuePop]))
+			res.RExpected[i-1].Add(vecR.Copy().Scale(flags[QueuePop]))
 		}
 	}
 
@@ -414,9 +415,9 @@ func (q *queueRState) NextRState(ctrl, ctrlR linalg.Vector) RState {
 	pushDataR := ctrlR[queueFlagCount:]
 	for i, prob := range q.SizeProbs {
 		probR := q.RSizeProbs[i]
-		pushVec := pushData.Copy().Scale(flags[queuePush] * prob)
-		pushVecR := pushDataR.Copy().Scale(flags[queuePush] * prob)
-		pushVecR.Add(pushData.Copy().Scale(flagsR[queuePush]*prob + flags[queuePush]*probR))
+		pushVec := pushData.Copy().Scale(flags[QueuePush] * prob)
+		pushVecR := pushDataR.Copy().Scale(flags[QueuePush] * prob)
+		pushVecR.Add(pushData.Copy().Scale(flagsR[QueuePush]*prob + flags[QueuePush]*probR))
 		if i == len(res.Expected)-1 {
 			res.Expected[i] = pushVec
 			res.RExpected[i] = pushVecR
