@@ -1,8 +1,11 @@
 package neuralstruct
 
 import (
+	"encoding/json"
+
 	"github.com/unixpickle/autofunc"
 	"github.com/unixpickle/num-analysis/linalg"
+	"github.com/unixpickle/serializer"
 )
 
 const queueFlagCount = 3
@@ -13,10 +16,24 @@ const (
 	queuePop
 )
 
+func init() {
+	var q Queue
+	serializer.RegisterTypedDeserializer(q.SerializerType(), DeserializeQueue)
+}
+
 // A Queue is a differentiable probabilistic FIFO queue
 // of real-valued vectors.
 type Queue struct {
 	VectorSize int
+}
+
+// DeserializeQueue deserializes a Queue.
+func DeserializeQueue(d []byte) (*Queue, error) {
+	var q Queue
+	if err := json.Unmarshal(d, &q); err != nil {
+		return nil, err
+	}
+	return &q, nil
 }
 
 // ControlSize returns the number of control vector
@@ -48,6 +65,17 @@ func (q *Queue) StartRState() RState {
 		OutputData:  zeroVec,
 		ROutputData: zeroVec,
 	}
+}
+
+// SerializerType returns the unique ID used to serialize
+// Queues with the serializer package.
+func (q *Queue) SerializerType() string {
+	return "github.com/unixpickle/neuralstruct.Queue"
+}
+
+// Serialize encodes the queue as binary data.
+func (q *Queue) Serialize() ([]byte, error) {
+	return json.Marshal(q)
 }
 
 type queueState struct {
