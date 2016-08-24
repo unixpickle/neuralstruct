@@ -2,9 +2,16 @@ package neuralstruct
 
 import (
 	"math"
+	"math/rand"
+	"testing"
 
 	"github.com/unixpickle/autofunc"
 	"github.com/unixpickle/num-analysis/linalg"
+)
+
+const (
+	benchmarkTimeSteps  = 100
+	benchmarkVectorSize = 40
 )
 
 func statesEqual(d1, d2 linalg.Vector) bool {
@@ -17,6 +24,40 @@ func statesEqual(d1, d2 linalg.Vector) bool {
 		}
 	}
 	return true
+}
+
+func forwardBenchmark(b *testing.B, s Struct) {
+	inputVec := make(linalg.Vector, s.DataSize())
+	for i := range inputVec {
+		inputVec[i] = rand.NormFloat64()
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		state := s.StartState()
+		for j := 0; j < benchmarkTimeSteps; j++ {
+			state = state.NextState(inputVec)
+		}
+	}
+}
+
+func backwardBenchmark(b *testing.B, s Struct) {
+	inputVec := make(linalg.Vector, s.ControlSize())
+	for i := range inputVec {
+		inputVec[i] = rand.NormFloat64()
+	}
+	upstreamVec := make(linalg.Vector, s.DataSize())
+	for i := 0; i < b.N; i++ {
+		state := s.StartState()
+		var states []State
+		for j := 0; j < benchmarkTimeSteps; j++ {
+			state = state.NextState(inputVec)
+			states = append(states, state)
+		}
+		var ups Grad
+		for j := len(states) - 1; j >= 0; j-- {
+			_, ups = states[j].Gradient(upstreamVec, ups)
+		}
+	}
 }
 
 type structFunc struct {

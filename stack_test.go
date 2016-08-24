@@ -129,3 +129,11 @@ func stackTestRFunc() (funcOut autofunc.RFunc, inSize int) {
 	res := &structRFunc{Struct: &Stack{VectorSize: 4}}
 	return res, res.Struct.ControlSize()
 }
+
+func BenchmarkStackForward(b *testing.B) {
+	forwardBenchmark(b, &Stack{VectorSize: benchmarkVectorSize})
+}
+
+func BenchmarkStackBackward(b *testing.B) {
+	backwardBenchmark(b, &Stack{VectorSize: benchmarkVectorSize})
+}

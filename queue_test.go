@@ -100,3 +100,11 @@ func queueTestRFunc() (funcOut autofunc.RFunc, inSize int) {
 	res := &structRFunc{Struct: &Queue{VectorSize: 4}}
 	return res, res.Struct.ControlSize()
 }
+
+func BenchmarkQueueForward(b *testing.B) {
+	forwardBenchmark(b, &Queue{VectorSize: benchmarkVectorSize})
+}
+
+func BenchmarkQueueBackward(b *testing.B) {
+	backwardBenchmark(b, &Queue{VectorSize: benchmarkVectorSize})
+}
