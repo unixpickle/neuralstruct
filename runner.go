@@ -29,6 +29,14 @@ func (r *Runner) Reset() {
 // the next StepTime works off of the state caused by
 // this StepTime.
 func (r *Runner) StepTime(input linalg.Vector) linalg.Vector {
+	res := r.StepTimeFull(input)
+	return res[r.Struct.ControlSize():]
+}
+
+// StepTimeFull is like StepTime, but instead of returning
+// part of the block's output, it returns the entire
+// output (including the control data).
+func (r *Runner) StepTimeFull(input linalg.Vector) linalg.Vector {
 	if r.curStateVec == nil {
 		r.curStateVec = make(linalg.Vector, r.Block.StateSize())
 		r.curState = r.Struct.StartState()
@@ -44,12 +52,11 @@ func (r *Runner) StepTime(input linalg.Vector) linalg.Vector {
 	out := r.Block.Batch(blockIn)
 
 	ctrl := out.Outputs()[0][:r.Struct.ControlSize()]
-	outVec := out.Outputs()[0][r.Struct.ControlSize():]
 
 	r.curState = r.curState.NextState(ctrl)
 	r.curStateVec = out.States()[0]
 
-	return outVec
+	return out.Outputs()[0]
 }
 
 // RunAll applies the RNN to a batch of sequences.
