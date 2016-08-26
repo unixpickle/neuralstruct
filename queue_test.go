@@ -2,12 +2,7 @@ package neuralstruct
 
 import (
 	"math"
-	"math/rand"
 	"testing"
-
-	"github.com/unixpickle/autofunc"
-	"github.com/unixpickle/autofunc/functest"
-	"github.com/unixpickle/num-analysis/linalg"
 )
 
 func TestQueueData(t *testing.T) {
@@ -42,63 +37,8 @@ func TestQueueData(t *testing.T) {
 	}
 }
 
-func TestQueueShallowGradient(t *testing.T) {
-	testQueueGradient(t, 1)
-}
-
-func TestQueueDeepGradient(t *testing.T) {
-	testQueueGradient(t, 4)
-}
-
-func testQueueGradient(t *testing.T, steps int) {
-	f, ctrl := queueTestFunc()
-	inVec := make(linalg.Vector, ctrl*steps)
-	for i := range inVec {
-		inVec[i] = rand.NormFloat64()
-	}
-	inVar := &autofunc.Variable{Vector: inVec}
-	test := functest.FuncTest{
-		F:     f,
-		Vars:  []*autofunc.Variable{inVar},
-		Input: inVar,
-	}
-	test.Run(t)
-}
-
-func TestQueueShallowRGradient(t *testing.T) {
-	testQueueRGradient(t, 1)
-}
-
-func TestQueueDeepRGradient(t *testing.T) {
-	testQueueRGradient(t, 4)
-}
-
-func testQueueRGradient(t *testing.T, steps int) {
-	f, ctrl := queueTestRFunc()
-	inVec := make(linalg.Vector, steps*ctrl)
-	inVecR := make(linalg.Vector, steps*ctrl)
-	for i := range inVec {
-		inVec[i] = rand.NormFloat64()
-		inVecR[i] = rand.NormFloat64()
-	}
-	inVar := &autofunc.Variable{Vector: inVec}
-	test := functest.RFuncTest{
-		F:     f,
-		Vars:  []*autofunc.Variable{inVar},
-		Input: inVar,
-		RV:    autofunc.RVector{inVar: inVecR},
-	}
-	test.Run(t)
-}
-
-func queueTestFunc() (funcOut autofunc.Func, inSize int) {
-	res := &structFunc{Struct: &Queue{VectorSize: 4}}
-	return res, res.Struct.ControlSize()
-}
-
-func queueTestRFunc() (funcOut autofunc.RFunc, inSize int) {
-	res := &structRFunc{Struct: &Queue{VectorSize: 4}}
-	return res, res.Struct.ControlSize()
+func TestQueueDerivatives(t *testing.T) {
+	testAllDerivatives(t, &Queue{VectorSize: 4})
 }
 
 func BenchmarkQueueForward(b *testing.B) {
