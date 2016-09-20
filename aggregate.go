@@ -1,10 +1,39 @@
 package neuralstruct
 
-import "github.com/unixpickle/num-analysis/linalg"
+import (
+	"fmt"
+
+	"github.com/unixpickle/num-analysis/linalg"
+	"github.com/unixpickle/serializer"
+)
+
+func init() {
+	var a Aggregate
+	var r RAggregate
+	serializer.RegisterTypedDeserializer(a.SerializerType(), DeserializeAggregate)
+	serializer.RegisterTypedDeserializer(r.SerializerType(), DeserializeRAggregate)
+}
 
 // Aggregate combines multiple Structs into a single,
 // compound struct.
 type Aggregate []Struct
+
+// DeserializeAggregate deserializes an Aggregate.
+func DeserializeAggregate(d []byte) (Aggregate, error) {
+	slice, err := serializer.DeserializeSlice(d)
+	if err != nil {
+		return nil, err
+	}
+	res := make(Aggregate, len(slice))
+	for i, x := range slice {
+		if s, ok := x.(Struct); !ok {
+			return nil, fmt.Errorf("deserialized type is not Struct: %T", x)
+		} else {
+			res[i] = s
+		}
+	}
+	return res, nil
+}
 
 // ControlSize returns the sum of the control sizes
 // of every structure in the aggregate.
@@ -42,9 +71,46 @@ func (a Aggregate) StartState() State {
 	return &res
 }
 
+// SerializerType returns the unique ID used to serialize
+// Aggregates with the serializer package.
+func (a *Aggregate) SerializerType() string {
+	return "github.com/unixpickle/neuralstruct.Aggregate"
+}
+
+// Serialize encodes the aggregate, given that all of the
+// contained structs are serializers.
+func (a Aggregate) Serialize() ([]byte, error) {
+	var serializers []serializer.Serializer
+	for _, x := range a {
+		if s, ok := x.(serializer.Serializer); ok {
+			serializers = append(serializers, s)
+		} else {
+			return nil, fmt.Errorf("struct is not a serializer: %T", x)
+		}
+	}
+	return serializer.SerializeSlice(serializers)
+}
+
 // An RAggregate is like an Aggregate, but with support
 // for the r-operator.
 type RAggregate []RStruct
+
+// DeserializeRAggregate deserializes an RAggregate.
+func DeserializeRAggregate(d []byte) (RAggregate, error) {
+	slice, err := serializer.DeserializeSlice(d)
+	if err != nil {
+		return nil, err
+	}
+	res := make(RAggregate, len(slice))
+	for i, x := range slice {
+		if r, ok := x.(RStruct); !ok {
+			return nil, fmt.Errorf("deserialized type is not RStruct: %T", x)
+		} else {
+			res[i] = r
+		}
+	}
+	return res, nil
+}
 
 // ControlSize is like Aggregate.ControlSize().
 func (r RAggregate) ControlSize() int {
@@ -72,6 +138,26 @@ func (r RAggregate) StartRState() RState {
 		res.JoinedRData = append(res.JoinedRData, state.RData()...)
 	}
 	return &res
+}
+
+// SerializerType returns the unique ID used to serialize
+// RAggregates with the serializer package.
+func (r RAggregate) SerializerType() string {
+	return "github.com/unixpickle/neuralstruct.RAggregate"
+}
+
+// Serialize encodes the aggregate, given that all of the
+// contained structs are serializers.
+func (r RAggregate) Serialize() ([]byte, error) {
+	var serializers []serializer.Serializer
+	for _, x := range r {
+		if s, ok := x.(serializer.Serializer); ok {
+			serializers = append(serializers, s)
+		} else {
+			return nil, fmt.Errorf("struct is not a serializer: %T", x)
+		}
+	}
+	return serializer.SerializeSlice(serializers)
 }
 
 func (r RAggregate) aggregate() Aggregate {
