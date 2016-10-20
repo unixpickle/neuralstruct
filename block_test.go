@@ -9,7 +9,7 @@ import (
 
 func TestBlock(t *testing.T) {
 	if testing.Short() {
-		return
+		t.SkipNow()
 	}
 	b := &Block{
 		Block:  rnn.NewLSTM(7, 9),
