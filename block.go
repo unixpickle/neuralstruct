@@ -76,22 +76,27 @@ func (b *Block) StartRState(rv autofunc.RVector) rnn.RState {
 }
 
 // PropagateStart back-propagates through the start state.
-func (b *Block) PropagateStart(s []rnn.StateGrad, g autofunc.Gradient) {
+func (b *Block) PropagateStart(s []rnn.State, u []rnn.StateGrad, g autofunc.Gradient) {
 	block := make([]rnn.StateGrad, len(s))
-	for i, stateObj := range s {
+	blockS := make([]rnn.State, len(s))
+	for i, stateObj := range u {
 		block[i] = stateObj.(blockStateGrad).BlockGrad
+		blockS[i] = s[i].(blockState).BlockState
 	}
-	b.Block.PropagateStart(block, g)
+	b.Block.PropagateStart(blockS, block, g)
 }
 
 // PropagateStartR is like PropagateStart but with support
 // for the r-operator.
-func (b *Block) PropagateStartR(s []rnn.RStateGrad, rg autofunc.RGradient, g autofunc.Gradient) {
+func (b *Block) PropagateStartR(s []rnn.RState, u []rnn.RStateGrad, rg autofunc.RGradient,
+	g autofunc.Gradient) {
 	block := make([]rnn.RStateGrad, len(s))
-	for i, stateObj := range s {
+	blockS := make([]rnn.RState, len(s))
+	for i, stateObj := range u {
 		block[i] = stateObj.(blockRStateGrad).BlockGrad
+		blockS[i] = s[i].(blockRState).BlockState
 	}
-	b.Block.PropagateStartR(block, rg, g)
+	b.Block.PropagateStartR(blockS, block, rg, g)
 }
 
 // ApplyBlock applies the block to a batch of inputs.
