@@ -64,23 +64,7 @@ func backwardBenchmark(b *testing.B, s Struct) {
 
 func testAllDerivatives(t *testing.T, s RStruct) {
 	for depth := 1; depth <= 4; depth++ {
-		name := fmt.Sprintf("Gradient%d", depth)
-		t.Run(name, func(t *testing.T) {
-			f := &structFunc{Struct: s}
-			inVec := make(linalg.Vector, depth*s.ControlSize())
-			for i := range inVec {
-				inVec[i] = rand.NormFloat64()
-			}
-			inVar := &autofunc.Variable{Vector: inVec}
-			test := functest.FuncTest{
-				F:     f,
-				Vars:  []*autofunc.Variable{inVar},
-				Input: inVar,
-			}
-			test.Run(t)
-		})
-
-		name = fmt.Sprintf("ROperator%d", depth)
+		name := fmt.Sprintf("Depth%d", depth)
 		t.Run(name, func(t *testing.T) {
 			f := &structRFunc{Struct: s}
 			inVec := make(linalg.Vector, depth*s.ControlSize())
@@ -90,13 +74,13 @@ func testAllDerivatives(t *testing.T, s RStruct) {
 				inVecR[i] = rand.NormFloat64()
 			}
 			inVar := &autofunc.Variable{Vector: inVec}
-			test := functest.RFuncTest{
+			test := functest.RFuncChecker{
 				F:     f,
 				Vars:  []*autofunc.Variable{inVar},
 				Input: inVar,
 				RV:    autofunc.RVector{inVar: inVecR},
 			}
-			test.Run(t)
+			test.FullCheck(t)
 		})
 	}
 }

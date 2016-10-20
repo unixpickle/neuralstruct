@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/unixpickle/autofunc"
+	"github.com/unixpickle/autofunc/seqfunc"
 	"github.com/unixpickle/num-analysis/linalg"
 	"github.com/unixpickle/weakai/neuralnet"
 	"github.com/unixpickle/weakai/rnn"
@@ -28,7 +28,7 @@ func TestRunner(t *testing.T) {
 	structure := &Stack{VectorSize: 4}
 
 	runner := Runner{Block: block, Struct: structure}
-	inputSeq := make([]autofunc.Result, runnerTestSeqLen)
+	inputSeq := make([]linalg.Vector, runnerTestSeqLen)
 	outputs := make([]linalg.Vector, runnerTestSeqLen)
 
 	for i := range outputs {
@@ -37,14 +37,17 @@ func TestRunner(t *testing.T) {
 			input[j] = rand.NormFloat64()
 		}
 		outputs[i] = runner.StepTime(input)
-		inputSeq[i] = &autofunc.Variable{Vector: input}
+		inputSeq[i] = input
 	}
 
-	seqFunc := &SeqFunc{
-		Block:  block,
-		Struct: structure,
+	seqFunc := &rnn.BlockSeqFunc{
+		B: &Block{
+			Block:  block,
+			Struct: structure,
+		},
 	}
-	expectedOutputs := seqFunc.BatchSeqs([][]autofunc.Result{inputSeq}).OutputSeqs()[0]
+	inRes := seqfunc.ConstResult([][]linalg.Vector{inputSeq})
+	expectedOutputs := seqFunc.ApplySeqs(inRes).OutputSeqs()[0]
 
 	if len(expectedOutputs) != len(outputs) {
 		t.Fatal("unexpected output count")
