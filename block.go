@@ -11,6 +11,11 @@ import (
 	"github.com/unixpickle/weakai/rnn"
 )
 
+func init() {
+	var b Block
+	serializer.RegisterTypedDeserializer(b.SerializerType(), DeserializeBlock)
+}
+
 type blockState struct {
 	BlockState  rnn.State
 	StructState State
