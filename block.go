@@ -41,6 +41,12 @@ type blockRStateGrad struct {
 
 // A Block is an rnn.Block which wraps an rnn.Block and
 // gives it access to an RStruct.
+//
+// When the enclosed block receives an input, the head of
+// that input will be the structure's data.
+// When it generates an output, the head of that output
+// will be used as control data for the structure.
+// In both contexts, "head" means the beginning.
 type Block struct {
 	Block  rnn.Block
 	Struct RStruct
