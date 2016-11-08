@@ -15,6 +15,15 @@ func init() {
 	serializer.RegisterTypedDeserializer(p.SerializerType(), DeserializePartialActivation)
 }
 
+// An Activator suggests an activation function.
+//
+// Generally, a Struct will suggest an activation which
+// should be applied to the raw control signal from a
+// controller before it is fed to the structure.
+type Activator interface {
+	SuggestedActivation() neuralnet.Layer
+}
+
 // ComponentRange specifies a range of components inside
 // a vector.
 type ComponentRange struct {

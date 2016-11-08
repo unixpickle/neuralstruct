@@ -6,6 +6,7 @@ import (
 	"github.com/unixpickle/autofunc"
 	"github.com/unixpickle/num-analysis/linalg"
 	"github.com/unixpickle/serializer"
+	"github.com/unixpickle/weakai/neuralnet"
 )
 
 // These are the control flags (in order) of a Stack.
@@ -69,6 +70,16 @@ func (s *Stack) SerializerType() string {
 // Serialize serializes the stack's parameters.
 func (s *Stack) Serialize() ([]byte, error) {
 	return json.Marshal(s)
+}
+
+// SuggestedActivation returns an activation function
+// which applies a hyperbolic tangent to the data outputs
+// while leaving the control outputs untouched.
+func (s *Stack) SuggestedActivation() neuralnet.Layer {
+	return &PartialActivation{
+		Ranges:      []ComponentRange{{Start: s.flagCount(), End: s.ControlSize()}},
+		Activations: []neuralnet.Layer{&neuralnet.HyperbolicTangent{}},
+	}
 }
 
 func (s *Stack) flagCount() int {

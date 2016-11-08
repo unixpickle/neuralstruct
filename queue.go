@@ -6,6 +6,7 @@ import (
 	"github.com/unixpickle/autofunc"
 	"github.com/unixpickle/num-analysis/linalg"
 	"github.com/unixpickle/serializer"
+	"github.com/unixpickle/weakai/neuralnet"
 )
 
 const queueFlagCount = 3
@@ -77,6 +78,16 @@ func (q *Queue) SerializerType() string {
 // Serialize encodes the queue as binary data.
 func (q *Queue) Serialize() ([]byte, error) {
 	return json.Marshal(q)
+}
+
+// SuggestedActivation returns an activation function
+// which applies a hyperbolic tangent to the data outputs
+// while leaving the control outputs untouched.
+func (q *Queue) SuggestedActivation() neuralnet.Layer {
+	return &PartialActivation{
+		Ranges:      []ComponentRange{{Start: queueFlagCount, End: q.ControlSize()}},
+		Activations: []neuralnet.Layer{&neuralnet.HyperbolicTangent{}},
+	}
 }
 
 type queueState struct {

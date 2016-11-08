@@ -5,6 +5,7 @@ import (
 
 	"github.com/unixpickle/num-analysis/linalg"
 	"github.com/unixpickle/serializer"
+	"github.com/unixpickle/weakai/neuralnet"
 )
 
 func init() {
@@ -73,7 +74,7 @@ func (a Aggregate) StartState() State {
 
 // SerializerType returns the unique ID used to serialize
 // Aggregates with the serializer package.
-func (a *Aggregate) SerializerType() string {
+func (a Aggregate) SerializerType() string {
 	return "github.com/unixpickle/neuralstruct.Aggregate"
 }
 
@@ -89,6 +90,24 @@ func (a Aggregate) Serialize() ([]byte, error) {
 		}
 	}
 	return serializer.SerializeSlice(serializers)
+}
+
+// SuggestedActivation suggests an activation function
+// using the suggestions of the enclosed structures.
+func (a Aggregate) SuggestedActivation() neuralnet.Layer {
+	pa := &PartialActivation{}
+	var idx int
+	for _, x := range a {
+		if sugger, ok := x.(Activator); ok {
+			pa.Ranges = append(pa.Ranges, ComponentRange{
+				Start: idx,
+				End:   idx + x.ControlSize(),
+			})
+			pa.Activations = append(pa.Activations, sugger.SuggestedActivation())
+		}
+		idx += x.ControlSize()
+	}
+	return pa
 }
 
 // An RAggregate is like an Aggregate, but with support
@@ -158,6 +177,24 @@ func (r RAggregate) Serialize() ([]byte, error) {
 		}
 	}
 	return serializer.SerializeSlice(serializers)
+}
+
+// SuggestedActivation suggests an activation function
+// using the suggestions of the enclosed structures.
+func (r RAggregate) SuggestedActivation() neuralnet.Layer {
+	pa := &PartialActivation{}
+	var idx int
+	for _, x := range r {
+		if sugger, ok := x.(Activator); ok {
+			pa.Ranges = append(pa.Ranges, ComponentRange{
+				Start: idx,
+				End:   idx + x.ControlSize(),
+			})
+			pa.Activations = append(pa.Activations, sugger.SuggestedActivation())
+		}
+		idx += x.ControlSize()
+	}
+	return pa
 }
 
 func (r RAggregate) aggregate() Aggregate {
