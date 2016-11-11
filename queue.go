@@ -27,6 +27,12 @@ func init() {
 // of real-valued vectors.
 type Queue struct {
 	VectorSize int
+
+	// PushBias determines an optional bias towards pushing
+	// from the SuggestedActivation() method.
+	// Reasonable values are -1, 0, or 1, for pushing being
+	// e times less likely, unbiased, or e times more likely.
+	PushBias float64
 }
 
 // DeserializeQueue deserializes a Queue.
@@ -84,10 +90,18 @@ func (q *Queue) Serialize() ([]byte, error) {
 // which applies a hyperbolic tangent to the data outputs
 // while leaving the control outputs untouched.
 func (q *Queue) SuggestedActivation() neuralnet.Layer {
-	return &PartialActivation{
+	res := &PartialActivation{
 		Ranges:      []ComponentRange{{Start: queueFlagCount, End: q.ControlSize()}},
 		Activations: []neuralnet.Layer{&neuralnet.HyperbolicTangent{}},
 	}
+	if q.PushBias != 0 {
+		res.Ranges = append([]ComponentRange{{Start: QueuePush, End: QueuePush + 1}},
+			res.Ranges...)
+		res.Activations = append([]neuralnet.Layer{
+			&neuralnet.RescaleLayer{Scale: 1, Bias: q.PushBias},
+		}, res.Activations...)
+	}
+	return res
 }
 
 type queueState struct {

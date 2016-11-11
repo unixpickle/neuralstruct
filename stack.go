@@ -29,6 +29,12 @@ type Stack struct {
 	// NoReplace, if true, indicates that the Stack should
 	// not provide a "replace" flag in the control signal.
 	NoReplace bool
+
+	// PushBias determines an optional bias towards pushing
+	// from the SuggestedActivation() method.
+	// Reasonable values are -1, 0, or 1, for pushing being
+	// e times less likely, unbiased, or e times more likely.
+	PushBias float64
 }
 
 // DeserializeStack deserializes a Stack.
@@ -76,10 +82,18 @@ func (s *Stack) Serialize() ([]byte, error) {
 // which applies a hyperbolic tangent to the data outputs
 // while leaving the control outputs untouched.
 func (s *Stack) SuggestedActivation() neuralnet.Layer {
-	return &PartialActivation{
+	res := &PartialActivation{
 		Ranges:      []ComponentRange{{Start: s.flagCount(), End: s.ControlSize()}},
 		Activations: []neuralnet.Layer{&neuralnet.HyperbolicTangent{}},
 	}
+	if s.PushBias != 0 {
+		res.Ranges = append([]ComponentRange{{Start: StackPush, End: StackPush + 1}},
+			res.Ranges...)
+		res.Activations = append([]neuralnet.Layer{
+			&neuralnet.RescaleLayer{Scale: 1, Bias: s.PushBias},
+		}, res.Activations...)
+	}
+	return res
 }
 
 func (s *Stack) flagCount() int {
